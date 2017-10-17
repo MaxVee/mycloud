@@ -23,9 +23,6 @@ package:
   # artifactDirectoryName: serverless/${{self:service}}/${{self:provider.stage}}/artifacts
   include:
     - conf
-
-    - dist
-    - node_modules
   exclude:
     # - .git/**
     - dist/.serverless/**
@@ -141,8 +138,9 @@ custom:
     presence: ${{self:custom.prefix}}presence
     seals: ${{self:custom.prefix}}seals
     pubkeys: ${{self:custom.prefix}}pubkeys
-    inbox: ${{self:custom.prefix}}inbox
-    outbox: ${{self:custom.prefix}}outbox
+    messages: ${{self:custom.prefix}}messages
+    # inbox: ${{self:custom.prefix}}inbox
+    # outbox: ${{self:custom.prefix}}outbox
     events: ${{self:custom.prefix}}events
     # pushsubscribers: ${{self:custom.prefix}}pushsubscribers
     users: ${{self:custom.prefix}}users
@@ -441,7 +439,7 @@ functions:
   #   memorySize: 512
 
   # replicates InboxTable to EventsTable
-  inbox2events:
+  messages2events:
     handler: lib/lambda/inbox-events.handler
     memorySize: 256
     events:
@@ -451,21 +449,7 @@ functions:
           startingPosition: TRIM_HORIZON
           arn:
             Fn::GetAtt:
-              - InboxTable
-              - StreamArn
-
-  # replicates OutboxTable to EventsTable
-  outbox2events:
-    handler: lib/lambda/outbox-events.handler
-    memorySize: 256
-    events:
-      - stream:
-          type: dynamodb
-          batchSize: 100
-          startingPosition: TRIM_HORIZON
-          arn:
-            Fn::GetAtt:
-              - OutboxTable
+              - MessagesTable
               - StreamArn
 
   # replicates SealsTable to EventsTable
@@ -726,7 +710,7 @@ functions:
 
   # bot-serviced lambda
   # replicates Inbox to per-type tables, e.g. tradle_AboutYou, tradle_PhotoID
-  bot_processinbox:
+  bot_processmessages:
     handler: samplebot/index.onmessagestream
     memorySize: 256
     events:
@@ -736,27 +720,10 @@ functions:
           startingPosition: TRIM_HORIZON
           arn:
             Fn::GetAtt:
-              - InboxTable
+              - MessagesTable
               - StreamArn
     # onError:
       # Ref: DeadLetterQueue
-
-  # bot-serviced lambda
-  # replicates Outbox to per-type tables, e.g. tradle_AboutYou, tradle_PhotoID
-  bot_processoutbox:
-    handler: samplebot/index.onmessagestream
-    memorySize: 256
-    events:
-      - stream:
-          type: dynamodb
-          batchSize: 100
-          startingPosition: TRIM_HORIZON
-          arn:
-            Fn::GetAtt:
-              - OutboxTable
-              - StreamArn
-    # onError:
-    #   Ref: DeadLetterQueue
 
   # bot-serviced lambda
   # graphql API and GraphiQL UI endpoint
@@ -925,13 +892,17 @@ resources:
     # InboxTable: ${{file(./conf/table/inbox.yml)}}
 
     # stores received messages (minus their payloads)
-    InboxTable:
+    MessagesTable:
       Type: AWS::DynamoDB::Table
-      Description: inbound messages from users
+      Description: messages from/to users
       Properties:
-        TableName: ${{self:custom.tables.inbox}}
+        TableName: ${{self:custom.tables.messages}}
         AttributeDefinitions:
           - AttributeName: _author
+            AttributeType: S
+          - AttributeName: _recipient
+            AttributeType: S
+          - AttributeName: _payloadLink
             AttributeType: S
           # - AttributeName: ${{self:custom.props.seq}}
           #   AttributeType: N
@@ -940,54 +911,36 @@ resources:
           - AttributeName: time
             AttributeType: N
         KeySchema:
-          - AttributeName: _author
+          - AttributeName: _link
             KeyType: HASH
-          - AttributeName: time
-            KeyType: RANGE
-          # - AttributeName: seq
-          #   KeyType: RANGE
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
         StreamSpecification:
           StreamViewType: NEW_AND_OLD_IMAGES
         GlobalSecondaryIndexes:
-          - IndexName: _link
+          - IndexName: _author
             KeySchema:
-              - AttributeName: _link
+              - AttributeName: _author
                 KeyType: HASH
+              - AttributeName: time
+                KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
             ProvisionedThroughput:
               ReadCapacityUnits: 5
               WriteCapacityUnits: 5
-
-    # OutboxTable: ${{file(./conf/table/outbox.yml)}}
-
-    # stores received messages (minus their payloads)
-    OutboxTable:
-      Type: AWS::DynamoDB::Table
-      Description: outbound messages to users
-      Properties:
-        TableName: ${{self:custom.tables.outbox}}
-        AttributeDefinitions:
-          - AttributeName: _recipient
-            AttributeType: S
-          - AttributeName: time
-            AttributeType: N
-          - AttributeName: _payloadLink
-            AttributeType: S
-        KeySchema:
-          - AttributeName: _recipient
-            KeyType: HASH
-          - AttributeName: time
-            KeyType: RANGE
-        ProvisionedThroughput:
-          ReadCapacityUnits: 5
-          WriteCapacityUnits: 5
-        StreamSpecification:
-          StreamViewType: NEW_AND_OLD_IMAGES
-        GlobalSecondaryIndexes:
+          - IndexName: _recipient
+            KeySchema:
+              - AttributeName: _recipient
+                KeyType: HASH
+              - AttributeName: time
+                KeyType: RANGE
+            Projection:
+              ProjectionType: KEYS_ONLY
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
           - IndexName: _payloadLink
             KeySchema:
               - AttributeName: _payloadLink

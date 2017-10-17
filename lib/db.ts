@@ -28,20 +28,38 @@ export = function createDB (opts: {
   // export Outbox only
   const messageModel = models['tradle.Message']
   if (!messageModel.isInterface) {
-    const outbox = createTable({
+    const messagesTable = createTable({
       models,
       objects: readOnlyObjects,
+      bodyInObjects: false,
+      forbidScan: true,
       model: messageModel,
-      tableName: tables.Outbox.name,
+      tableName: tables.Messages.name,
       prefix,
       // better load these from serverless-yml
-      hashKey: '_recipient',
-      rangeKey: 'time',
+      hashKey: '_link',
       indexes: [
         {
-          hashKey: '_payloadLink',
+          hashKey: '_author',
           rangeKey: 'time',
-          name: 'PayloadLinkIndex',
+          name: '_author',
+          type: 'global',
+          projection: {
+            ProjectionType: 'KEYS_ONLY'
+          }
+        },
+        {
+          hashKey: '_recipient',
+          rangeKey: 'time',
+          name: '_recipient',
+          type: 'global',
+          projection: {
+            ProjectionType: 'KEYS_ONLY'
+          }
+        },
+        {
+          hashKey: '_payloadLink',
+          name: '_payloadLink',
           type: 'global',
           projection: {
             ProjectionType: 'KEYS_ONLY'
@@ -50,7 +68,7 @@ export = function createDB (opts: {
       ]
     })
 
-    db.setTableForType('tradle.Message', outbox)
+    db.setTableForType('tradle.Message', messagesTable)
   }
 
   const pubKeyModel = models['tradle.PubKey']

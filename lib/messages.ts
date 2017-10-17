@@ -55,21 +55,25 @@ export default class Messages {
   private tables: any
   private inbox: any
   private outbox: any
+  private db: any
 
   constructor (opts: {
     env: Env,
     identities: Identities,
     objects: Objects,
-    tables: any
+    tables: any,
+    db: any
   }) {
-    const { env, identities, objects, tables } = opts
+    const { env, identities, objects, tables, db } = opts
     this.env = env
     this.debug = env.logger('messages')
     this.identities = identities
     this.objects = objects
     this.tables = tables
-    this.outbox = tables.Outbox
-    this.inbox = tables.Inbox
+    // yes, they're the same table
+    this.outbox = tables.Messages
+    this.inbox = tables.Messages
+    this.db = db
   }
 
   public normalizeInbound = (event):ITradleMessage => {
@@ -271,13 +275,13 @@ export default class Messages {
     this.debug(`looking up last message to ${recipient}`)
 
     const query = this.getLastMessageToQuery({ recipient })
-    query.ExpressionAttributeNames!['#link'] = '_link'
-    query.ExpressionAttributeNames![`#${SEQ}`] = SEQ
-    query.ProjectionExpression = `#${SEQ}, #link`
+    // query.ExpressionAttributeNames!['#link'] = '_link'
+    // query.ExpressionAttributeNames![`#${SEQ}`] = SEQ
+    // query.ProjectionExpression = `#${SEQ}, #link`
 
     let last
     try {
-      last = await this.outbox.findOne(query)
+      last = await this.findOne(this.outbox, query)
       this.debug('last message:', prettify(last))
       return {
         seq: last[SEQ],
@@ -329,8 +333,8 @@ export default class Messages {
     })
   }
 
-  public getInboundByLink = function getInboundByLink (link) {
-    return this.findOne(this.inbox, {
+  public getInboundByLink = async (link:string) => {
+    const keys = await this.findOne(this.inbox, {
       IndexName: '_link',
       KeyConditionExpression: '#link = :link',
       ExpressionAttributeNames: {
@@ -342,6 +346,8 @@ export default class Messages {
       ScanIndexForward: true,
       Limit: 1
     })
+
+    return this.get(this.inbox, keys)
   }
 
   // const assertNotDuplicate = co(function* (link) {
@@ -478,22 +484,29 @@ export default class Messages {
     return message
   }
 
-  private get = (table, Key):Promise<ITradleMessage> => {
-    return table
-      .get({ Key })
-      .then(this.messageFromEventPayload)
+  private get = async (table, Key):Promise<ITradleMessage> => {
+    const message = await table.get({ Key })
+    return this.messageFromEventPayload(message)
   }
 
-  private findOne = (table, params):Promise<ITradleMessage> => {
-    return table
-      .findOne(params)
-      .then(this.messageFromEventPayload)
+  private findOne = async (table, params):Promise<ITradleMessage> => {
+    let message = await table.findOne(params)
+    if (params.IndexName) {
+      message = await table.get({ Key: getKeys(message) })
+    }
+
+    return this.messageFromEventPayload(message)
   }
 
-  private find = (table, params):Promise<ITradleMessage[]> => {
-    return table
-      .find(params)
-      .then(events => events.map(this.messageFromEventPayload))
+  private find = async (table, params):Promise<ITradleMessage[]> => {
+    let messages = await table.find(params)
+    if (params.IndexName) {
+      messages = await Promise.all(messages.map(keys => table.get({
+        Key: getKeys(keys)
+      })))
+    }
+
+    return messages.map(this.messageFromEventPayload)
   }
 
   private getMessagesFromQuery = ({
@@ -528,6 +541,7 @@ export default class Messages {
     const { author } = opts
     return {
       TableName: this.inbox.name,
+      IndexName: '_author',
       KeyConditionExpression: '#author = :author AND #time > :time',
       ExpressionAttributeNames: {
         '#author': '_author',
@@ -551,6 +565,7 @@ export default class Messages {
     const { recipient, gt, afterMessage, limit } = opts
     const params:AWS.DynamoDB.DocumentClient.QueryInput = {
       TableName: this.outbox.name,
+      IndexName: '_recipient',
       KeyConditionExpression: `#recipient = :recipient AND #time > :time`,
       ExpressionAttributeNames: {
         '#recipient': '_recipient',
@@ -580,6 +595,7 @@ export default class Messages {
     const { recipient } = opts
     return {
       TableName: this.outbox.name,
+      IndexName: '_recipient',
       KeyConditionExpression: `#recipient = :recipient AND #time > :time`,
       ExpressionAttributeNames: {
         '#recipient': '_recipient',
@@ -641,5 +657,11 @@ const getIntroducedIdentity = (payload) => {
 
   if (type === SELF_INTRODUCTION || type === INTRODUCTION || type === IDENTITY_PUBLISH_REQUEST) {
     return payload.identity
+  }
+}
+
+const getKeys = props => {
+  return {
+    _link: props._link
   }
 }
