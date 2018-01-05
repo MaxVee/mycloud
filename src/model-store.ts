@@ -1,6 +1,6 @@
 import { EventEmitter} from 'events'
 import _ = require('lodash')
-import mem = require('mem')
+import mergeModels = require('@tradle/merge-models')
 import ModelsPack = require('@tradle/models-pack')
 import { TYPE } from '@tradle/constants'
 import {
@@ -10,12 +10,17 @@ import {
 import Logger from './logger'
 import Friends from './friends'
 import { Buckets } from './buckets'
+import { CacheableBucketItem } from './cacheable-bucket-item'
 import Errors = require('./errors')
 import Tradle from './tradle'
 import { Bucket } from './bucket'
 import {
   PRIVATE_CONF_BUCKET
 } from './constants'
+
+import {
+  toModelsMap
+} from './utils'
 
 const CUMULATIVE_PACK_KEY = PRIVATE_CONF_BUCKET.modelsPack
 const CUMULATIVE_GRAPHQL_SCHEMA_KEY = PRIVATE_CONF_BUCKET.graphqlSchema
@@ -27,27 +32,43 @@ const BUILT_IN_NAMESPACES = [
   'io.tradle'
 ]
 
+const MINUTE = 60000
+
 const firstValue = obj => {
   for (let key in obj) return obj[key]
+}
+
+// type CacheablePacks = {
+//   [domain:string]: CacheableBucketItem
+// }
+
+export type ModelsPackInput = {
+  models: any
+  namespace?: string
 }
 
 export class ModelStore extends EventEmitter {
   public cumulativePackKey: string
   public cumulativeGraphqlSchemaKey: string
+  public cumulativePack: CacheableBucketItem
+  public cumulativeGraphqlSchema: CacheableBucketItem
+  public myModelsPack: any
   private tradle: Tradle
   private logger: Logger
   private cache: DBModelStore
   private myDomain: string
   private myNamespace: string
-  private _myCustomModels: any
+  private myCustomModels: any
   private baseModels: any
+  private baseModelsIds: string[]
   constructor (tradle:Tradle) {
     super()
 
     this.tradle = tradle
     this.logger = tradle.logger.sub('modelstore')
     this.baseModels = tradle.models
-    this._myCustomModels = {}
+    this.baseModelsIds = Object.keys(this.baseModels)
+    this.myCustomModels = {}
     this.cache = createStore({
       models: this.baseModels,
       onMissingModel: this.onMissingModel.bind(this)
@@ -56,14 +77,26 @@ export class ModelStore extends EventEmitter {
     this.cache.on('update', () => this.emit('update'))
     this.cumulativePackKey = CUMULATIVE_PACK_KEY
     this.cumulativeGraphqlSchemaKey = CUMULATIVE_GRAPHQL_SCHEMA_KEY
+    this.cumulativePack = new CacheableBucketItem({
+      bucket: this.bucket,
+      key: this.cumulativePackKey,
+      ttl: 5 * MINUTE
+    })
+
+    this.cumulativeGraphqlSchema = new CacheableBucketItem({
+      bucket: this.bucket,
+      key: this.cumulativeGraphqlSchemaKey,
+      ttl: 5 * MINUTE
+    })
   }
 
-  get bucket():Bucket {
+  public get bucket():Bucket {
     return this.tradle.buckets.PrivateConf
   }
 
   public get = async (id) => {
-    if (BUILT_IN_NAMESPACES.includes(ModelsPack.getNamespace(id))) {
+    const namespace = ModelsPack.getNamespace(id)
+    if (ModelsPack.isReservedNamespace(namespace)) {
       return this.cache.models[id]
     }
 
@@ -74,18 +107,32 @@ export class ModelStore extends EventEmitter {
     return this.cache.models
   }
 
-  public getAllCustomModels () {
-    return _.omit(this.models, this.baseModels)
+  public getCustomModels () {
+    return _.clone(this.myCustomModels)
   }
 
-  public getMyCustomModels () {
-    return _.clone(this._myCustomModels)
-    // return this.getModelsForNamespace(this.myNamespace)
-  }
+  /**
+   * Add a models pack to the cumulative models pack
+   * update related resources (e.g. graphql schema)
+   */
+  public addModelsPack = async ({
+    modelsPack,
+    validateAuthor=true,
+    validateUpdate=true
+  }: {
+    modelsPack: any,
+    validateAuthor?: boolean,
+    validateUpdate?: boolean,
+  }) => {
+    if (validateAuthor) {
+      await this.validateModelsPackNamespaceOwner(modelsPack)
+    }
 
-  public updateCumulativeForeignModelsWithModelsPack = async ({ modelsPack }) => {
-    await this.validateInboundModelsPack(modelsPack)
-    const current = await this.getCumulativeForeignModelsPack()
+    if (validateUpdate) {
+      await this.validateModelsPackUpdate(modelsPack)
+    }
+
+    const current = await this.getCumulativeModelsPack()
     let cumulative
     if (current) {
       const { namespace } = modelsPack
@@ -98,19 +145,32 @@ export class ModelStore extends EventEmitter {
       cumulative = modelsPack
     }
 
-    await this.bucket.gzipAndPut(this.cumulativePackKey, cumulative)
+    await Promise.all([
+      this.bucket.gzipAndPut(this.cumulativePackKey, cumulative),
+      this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
+    ])
+
     return cumulative
   }
 
-  public addModelsPack = async ({ modelsPack }) => {
-    const foreign = await this.updateCumulativeForeignModelsWithModelsPack({ modelsPack })
-    const models = getCumulative(this, foreign, false)
+  public updateGraphqlSchema = async (opts:any={}) => {
+    let { cumulativeModelsPack } = opts
+    if (!cumulativeModelsPack) cumulativeModelsPack = await this.getCumulativeModelsPack()
+
+    const models = getCumulative(this, cumulativeModelsPack, false)
     const { exportSchema } = require('./bot/graphql')
     const schema = exportSchema({ models })
     await this.bucket.gzipAndPut(this.cumulativeGraphqlSchemaKey, schema)
   }
 
-  public getCumulativeForeignModelsPack = async () => {
+  public loadModelsPacks = async () => {
+    const cumulative = await this.getCumulativeModelsPack()
+    if (cumulative) {
+      _.each(cumulative, ({ models }) => this.addModels(models))
+    }
+  }
+
+  public getCumulativeModelsPack = async () => {
     try {
       return await this.bucket.getJSON(this.cumulativePackKey)
     } catch (err) {
@@ -119,15 +179,9 @@ export class ModelStore extends EventEmitter {
     }
   }
 
-  public getCumulativeModelsPack = async () => {
-    const foreign = await this.getCumulativeForeignModelsPack()
-    return ModelsPack.pack({
-      models: getCumulative(this, foreign, true)
-    })
-  }
-
   public getSavedGraphqlSchema = async () => {
-    return await this.bucket.getJSON(this.cumulativeGraphqlSchemaKey)
+    const schema = await this.bucket.getJSON(this.cumulativeGraphqlSchemaKey)
+    return require('./bot/graphql').importSchema(schema)
   }
 
   public getGraphqlSchema = async () => {
@@ -147,32 +201,60 @@ export class ModelStore extends EventEmitter {
     return ModelsPack.pack({ namespace, models })
   }
 
-  public setMyCustomModels = (models) => {
+  public saveCustomModels = async (opts: ModelsPackInput) => {
+    const { namespace, models } = opts
+    // if (!namespace) namespace = this.myNamespace
+    if (namespace) {
+      this.setMyNamespace(namespace)
+    }
+
+    this.setCustomModels(opts)
+
+    await this.addModelsPack({
+      validateAuthor: false,
+      modelsPack: this.myModelsPack
+    })
+  }
+
+  public setCustomModels = ({ models, namespace }: ModelsPackInput) => {
     // ModelsPack.validate(ModelsPack.pack({ models }))
     const first = firstValue(models)
     if (!first) return
 
-    this.setMyNamespace(ModelsPack.getNamespace(first))
-    this.cache.removeModels(this._myCustomModels)
+    if (!namespace) {
+      namespace = this.myNamespace || ModelsPack.getNamespace(first)
+    }
+
+    // validate
+    mergeModels()
+      .add(this.baseModels, { validate: false })
+      .add(models)
+
+    const pack = ModelsPack.pack({ namespace, models })
+    ModelsPack.validate(pack)
+
+    this.cache.removeModels(this.myCustomModels)
     this.addModels(models)
-    this._myCustomModels = _.clone(models)
+    this.myModelsPack = pack
+    this.myNamespace = namespace
+    this.myCustomModels = _.clone(models)
   }
 
   public setMyNamespace = (namespace:string) => {
     this.myNamespace = namespace
-    this.myDomain = namespace.split('.').reverse().join('.')
+    this.myDomain = toggleDomainVsNamespace(namespace)
   }
 
   public setMyDomain = (domain:string) => {
     this.myDomain = domain
-    this.myNamespace = domain.split('.').reverse().join('.')
+    this.myNamespace = toggleDomainVsNamespace(domain)
   }
 
-  public buildMyModelsPack = () => {
-    const models = this.getMyCustomModels()
-    const namespace = this.myNamespace || ModelsPack.getNamespace(_.values(models))
-    return ModelsPack.pack({ namespace, models })
-  }
+  // public buildMyModelsPack = () => {
+  //   const models = this.getCustomModels()
+  //   const namespace = this.myNamespace || ModelsPack.getNamespace(_.values(models))
+  //   return ModelsPack.pack({ namespace, models })
+  // }
 
   public addModels = (models) => {
     this.cache.addModels(models)
@@ -182,12 +264,11 @@ export class ModelStore extends EventEmitter {
     return await this.bucket.getJSON(getModelsPackConfKey(domain))
   }
 
-  public validateInboundModelsPack = async (pack)  => {
+  public validateModelsPackNamespaceOwner = async (pack) => {
     if (!pack.namespace) {
       throw new Error(`ignoring ModelsPack sent by ${pack._author}, as it isn't namespaced`)
     }
 
-    // ModelsPack.validate(pack)
     const domain = ModelsPack.getDomain(pack)
     const friend = await this.tradle.friends.getByDomain(domain)
     if (!pack._author) {
@@ -196,13 +277,41 @@ export class ModelStore extends EventEmitter {
 
     if (friend._identityPermalink !== pack._author) {
       throw new Error(`ignoring ModelsPack sent by ${pack._author}.
-Domain ${domain} belongs to ${friend._identityPermalink}`)
+Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identityPermalink}`)
     }
   }
 
+  public validateModelsPackUpdate = async (pack) => {
+    const ret = {
+      changed: true
+    }
+
+    const domain = ModelsPack.getDomain(pack)
+    try {
+      const current = await this.getModelsPackByDomain(domain)
+      validateUpdate(current, pack)
+      ret.changed = current.versionId !== pack.versionId
+    } catch (err) {
+      Errors.ignore(err, Errors.NotFound)
+    }
+
+    return ret
+  }
+
+  public validateModelsPack = async (modelsPack) => {
+    await this.validateModelsPackNamespaceOwner(modelsPack)
+    return await this.validateModelsPackUpdate(modelsPack)
+  }
+
+  /**
+   * Save a models pack to storage
+   */
   public saveModelsPack = async ({ modelsPack }) => {
-    await this.validateInboundModelsPack(modelsPack)
+    const { changed } = await this.validateModelsPack(modelsPack)
+    if (!changed) return
+
     await this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack)
+    // await this.addModelsPack({ modelsPack })
   }
 
   private onMissingModel = async (id):Promise<void> => {
@@ -224,15 +333,18 @@ const getModelsPackConfKey = domainOrPack => {
 }
 
 export const createModelStore = (tradle:Tradle) => new ModelStore(tradle)
+export const toggleDomainVsNamespace = str => str.split('.').reverse().join('.')
+export const validateUpdate = (current, updated) => {
+  const lost = _.difference(current, Object.keys(updated))
+  if (lost.length) {
+    throw new Error(`models cannot be removed, only deprecated: ${lost.join(', ')}`)
+  }
+}
 
 const getCumulative = (modelStore:ModelStore, foreign, customOnly) => {
-  const domestic = customOnly ? modelStore.getMyCustomModels() : modelStore.models
+  const domestic = customOnly ? modelStore.getCustomModels() : modelStore.models
   return {
     ...toModelsMap(_.get(foreign, 'models', [])),
     ...domestic
   }
 }
-
-const toModelsMap = models => _.transform(models, (result, model) => {
-  result[model.id] = model
-}, {})

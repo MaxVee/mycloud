@@ -92,22 +92,19 @@ export const createGetIdentifierFromReq = ({ employeeManager }) => {
 }
 
 export const createGetModelsForUser = ({ bot, productsAPI, employeeManager }) => {
-  const employeeModels = _.omit(bot.models, BASE_MODELS_IDS)
-  const customerModels = employeeModels
+  // const employeeModels = _.omit(bot.models, BASE_MODELS_IDS)
+  // const customerModels = employeeModels
   // const customerModels = _.omit(
   //   productsAPI.models.all,
   //   Object.keys(productsAPI.models.private.all)
   //     .concat(BASE_MODELS_IDS)
   // )
 
-  // employeeModels['tradle.OnfidoVerification'] = baseModels['tradle.OnfidoVerification']
-  // customerModels['tradle.OnfidoVerification'] = baseModels['tradle.OnfidoVerification']
-
   return user => {
     if (employeeManager.isEmployee(user)) {
-      return employeeModels
+      return bot.modelStore.getAllCustomModels()
     }
 
-    return customerModels
+    return bot.modelStore.getMyCustomModels()
   }
 }

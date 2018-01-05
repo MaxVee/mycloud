@@ -4,6 +4,7 @@ import test = require('tape')
 import _ = require('lodash')
 import Cache = require('lru-cache')
 import sinon = require('sinon')
+import { SIG } from '@tradle/constants'
 import ModelsPack = require('@tradle/models-pack')
 import Logger from '../logger'
 import KeyValueTable from '../key-value-table'
@@ -21,19 +22,44 @@ import {
   wrap,
   wait,
   timeoutIn,
-  batchProcess
+  batchProcess,
+  toModelsMap,
+  stableStringify,
+  omitVirtualRecursive
 } from '../utils'
 import Errors = require('../errors')
 import { Tradle, createTestTradle } from '../'
 import { Bucket } from '../bucket'
 import { createSilentLogger } from './utils'
 import { ModelStore, createModelStore } from '../model-store'
+import PingPongModels = require('../bot/ping-pong-models')
 
 const { KVTable } = require('../definitions')
 const aliceKeys = require('./fixtures/alice/keys')
 
 const tradle = new Tradle()
 const { dbUtils } = tradle
+
+// test('omitVirtualRecursive', t => {
+//   const obj = {
+//     [SIG]: 'somesig',
+//     a: {
+//       [SIG]: 'somesig1',
+//       b: {
+//         blah: 1,
+//         _author: 'allowedauthorprop'
+//       }
+//     }
+//   }
+
+//   const withVirtual:any = _.cloneDeep(obj)
+//   withVirtual._author = 'someone'
+//   withVirtual._link = 'link1'
+//   withVirtual._permalink = 'link2'
+//   withVirtual.a._author = 'someoneelse'
+//   t.same(omitVirtualRecursive(withVirtual), obj)
+//   t.end()
+// })
 
 test('cachify', loudAsync(async (t) => {
   const data = {
@@ -751,11 +777,25 @@ test('ModelStore', loudAsync(async (t) => {
   t.same(await store.getModelsPackByDomain(friend1.domain), modelsPack)
 
   // 5
-  t.equal(await store.getCumulativeForeignModelsPack(), null)
+  t.equal(await store.getCumulativeModelsPack(), null)
+  store.setCustomModels({ models: PingPongModels })
+  // 6
+  t.equal(await store.getCumulativeModelsPack(), null)
+
   console.log('patience...')
   await store.addModelsPack({ modelsPack })
-  // 6
-  t.same(await store.getCumulativeForeignModelsPack(), modelsPack)
+  // 7
+  t.same(await store.getCumulativeModelsPack(), modelsPack, 'models pack added to cumulative pack')
+
+  await store.saveCustomModels({ models: PingPongModels })
+
+  let cumulative = await store.getCumulativeModelsPack()
+  let isCumulative = modelsPack.models.concat(_.values(PingPongModels)).every(model => {
+    return cumulative.models.find(m => m.id === model.id)
+  })
+
+  // 8
+  t.equal(isCumulative, true, 'my custom models added to cumulative models pack')
 
   const namespace2 = domainToNamespace(friend2.domain)
   const modelsPack2 = ModelsPack.pack({
@@ -775,30 +815,37 @@ test('ModelStore', loudAsync(async (t) => {
   })
 
   modelsPack2._author = friend2._identityPermalink
+  try {
+    await store.addModelsPack({
+      modelsPack: {
+        ...modelsPack2,
+        namespace
+      }
+    })
+
+    t.fail('expected validation to fail')
+  } catch (err) {
+    t.ok(/domain|namespace/i.test(err.message))
+  }
+
   console.log('patience...')
   await store.addModelsPack({ modelsPack: modelsPack2 })
-  const allForeign = await store.getCumulativeForeignModelsPack()
-  let isCumulative = modelsPack.models.concat(modelsPack2.models).every(model => {
-    return allForeign.models.find(m => m.id === model.id)
-  })
-
-  // 7
-  t.equal(isCumulative, true)
-
-  const cumulative = await store.getCumulativeModelsPack()
+  cumulative = await store.getCumulativeModelsPack()
   isCumulative = modelsPack.models
     .concat(modelsPack2.models)
-    .concat(_.values(store.getMyCustomModels())).every(model => {
+    .concat(_.values(PingPongModels))
+    .every(model => {
       return cumulative.models.find(m => m.id === model.id)
     })
 
-  // 8
+  // 9
   t.equal(isCumulative, true)
 
   // console.log('patience...')
-  const schema = await store.getSavedGraphqlSchema()
-  // 9
-  t.ok(schema)
+  // const schema = await store.getSavedGraphqlSchema()
+
+  // 10
+  // t.ok(schema)
   t.end()
 }))
 

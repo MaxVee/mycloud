@@ -40,7 +40,9 @@ import { CacheContainer } from './types'
 import Logger from './logger'
 import Env from './env'
 import Tradle from './tradle'
+import models = require('./models')
 
+const BaseObjectModel = models['tradle.Object']
 const debug = require('debug')('tradle:sls:utils')
 const notNull = obj => obj != null
 const isPromise = obj => obj && typeof obj.then === 'function'
@@ -984,3 +986,24 @@ export const getMessageGist = (message):any => {
   }
 }
 
+export const toModelsMap = models => _.transform(models, (result, model:any) => {
+  result[model.id] = model
+}, {})
+
+export const ensureNoVirtualProps = resource => {
+  // if (!_.isEqual(resource, omitVirtualDeep(resource))) {
+  //   throw new Errors.InvalidObjectFormat(`virtual property not allowed: ${this.key}`)
+  // }
+}
+
+// export const omitVirtualRecursive = resource => {
+//   if (!resource[SIG]) return _.clone(resource)
+
+//   return _.transform(resource, (result, value, key) => {
+//     if (value && typeof value === 'object') {
+//       result[key] = omitVirtualRecursive(value)
+//     } else if (!FORBIDDEN_PROPS.includes(key)) {
+//       result[key] = value
+//     }
+//   })
+// }

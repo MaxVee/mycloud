@@ -114,8 +114,6 @@ export default function createProductsBot ({
   // console.log('base models', BASE_MODELS_IDS.join(', '))
   // console.log('all models', Object.keys(productsAPI.models.all).join(', '))
 
-  bot.setMyCustomModels(customModels)
-  // bot.setMyCustomModels(_.omit(productsAPI.models.all, BASE_MODELS_IDS))
   // if (handleMessages) {
   //   productsAPI.install(bot)
   // } else {

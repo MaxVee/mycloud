@@ -64,6 +64,6 @@ export const createMiddleware = (lambda:Lambda, components) => {
   ])
 
   defineGetter(middleware, 'setGraphiqlOptions', () => graphqlHandler.setGraphiqlOptions)
-  defineGetter(middleware, 'getGraphiqlAPI', () => graphqlHandler.getGraphiqlAPI)
+  defineGetter(middleware, 'getGraphqlAPI', () => graphqlHandler.getGraphqlAPI)
   return middleware
 }

@@ -50,6 +50,8 @@ const init = async () => {
 
   middleware.setGraphiqlOptions(opts)
 
+  await middleware.getGraphqlAPI({ bot }).loadModelsPacks()
+
   // lambda.use(graphqlMiddleware(lambda, components))
   bot.ready()
 }

@@ -13,6 +13,7 @@ import { allSettled, RESOLVED_PROMISE } from '../utils'
 import { Bucket } from '../bucket'
 import { CacheableBucketItem } from '../cacheable-bucket-item'
 import Logger from '../logger'
+import { ModelStore, toggleDomainVsNamespace } from '../model-store'
 
 const { LOGO_UNKNOWN } = require('./media')
 const DEFAULT_CONF = require('./conf/provider')
@@ -28,6 +29,13 @@ const baseOrgObj = {
 
 const baseStylePackObj = {
   [TYPE]: 'tradle.StylesPack'
+}
+
+export type UpdateConfInput = {
+  style: any
+  models: any
+  bot: any
+  terms: any
 }
 
 export const BOT_CONF_KEY = 'conf/bot.json'
@@ -84,6 +92,7 @@ const parts = {
 
 export class Conf {
   public bot: any
+  public modelStore: ModelStore
   public logger: Logger
   public privateConfBucket: Bucket
   public botConf: CacheableBucketItem
@@ -98,6 +107,7 @@ export class Conf {
     logger?
   }) {
     this.bot = bot
+    this.modelStore = bot.modelStore
     this.logger = logger || bot.logger
     const { buckets } = bot
     this.privateConfBucket = buckets.PrivateConf
@@ -161,13 +171,22 @@ export class Conf {
     await this.style.putIfDifferent(value)
   }
 
-  public setModels = async (value:any):Promise<boolean> => {
-    // validate
-    mergeModels()
-      .add(baseModels, { validate: false })
-      .add(value)
+  public setCustomModels = async (models:any):Promise<boolean> => {
+    const [
+      org,
+      current
+    ] = await Promise.all([
+      this.org.get(),
+      this.models.get().catch(err => {
+        Errors.ignore(err, Errors.NotFound)
+        return {}
+      })
+    ])
 
-    return await this.models.putIfDifferent(value)
+    const { domain } = org
+    const namespace = toggleDomainVsNamespace(domain)
+    await this.modelStore.saveCustomModels({ models, namespace })
+    await this.models.putIfDifferent(models)
   }
 
   public setTermsAndConditions = async (value:string|Buffer):Promise<boolean> => {
@@ -268,15 +287,34 @@ export class Conf {
     await this.save({ identity, org, bot: conf.bot, style })
   }
 
-  public update = async (conf) => {
-    await this.save({
-      bot: conf.bot,
-      style: conf.style
-    })
-
-    if (conf.bot) {
-      await this.forceReinitializeContainers()
+  public update = async (update:UpdateConfInput) => {
+    const { style, models, bot, terms } = update
+    if (style) {
+      await this.setStyle(style)
+      await this.recalcPublicInfo()
     }
+
+    if (models) {
+      await this.setCustomModels(models)
+    }
+
+    if (bot) {
+      await this.setBotConf(bot)
+      await this.recalcPublicInfo()
+    }
+
+    if (terms) {
+      await this.setTermsAndConditions(terms)
+    }
+
+    // await this.save({
+    //   bot: conf.bot,
+    //   style: conf.style
+    // })
+
+    // if (conf.bot) {
+    //   await this.forceReinitializeContainers()
+    // }
   }
 
   public save = async ({ identity, org, style, bot }: {

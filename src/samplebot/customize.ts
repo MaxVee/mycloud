@@ -37,6 +37,8 @@ export async function customize (opts) {
 
   const { domain } = org
   const namespace = domain.split('.').reverse().join('.')
+  bot.setCustomModels({ namespace, models: customModels })
+
   const onfido = _.get(conf, ONFIDO_PLUGIN_PATH)
   if (style) {
     try {
