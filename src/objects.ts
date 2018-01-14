@@ -53,11 +53,10 @@ export default class Objects {
 
     const type = object[TYPE]
     if (object._sigPubKey) {
-      debugger
-      this.logger.warn('object has "_sigPubKey", be sure you validated it!', {
-        object,
-        stack: new Error().stack
-      })
+      // this.logger.warn('object has "_sigPubKey", be sure you validated it!', {
+      //   object,
+      //   stack: new Error().stack
+      // })
     } else {
       let pubKey
       try {

@@ -11,7 +11,7 @@ export const getDefaultIdentifierFromUser = (user) => user.id
 export const getDefaultIdentifierFromReq = ({ user }) => getDefaultIdentifierFromUser(user)
 
 export const keepModelsFreshPlugin = ({
-  getModelsForUser,
+  getModelsPackForUser,
   propertyName=defaultPropertyName,
   // unique identifier for counterparty
   // which will be used to track freshness.
@@ -19,7 +19,7 @@ export const keepModelsFreshPlugin = ({
   getIdentifier=getDefaultIdentifierFromReq,
   send
 }: {
-  getModelsForUser: (user) => any,
+  getModelsPackForUser: (user) => any,
   send: ({ req, to, object }) => Promise<any>
   getIdentifier?: (req:any) => string,
   propertyName?: string,
@@ -29,14 +29,16 @@ export const keepModelsFreshPlugin = ({
   return async (req) => {
     const identifier = getIdentifier(req)
     const { user } = req
-    let models = getModelsForUser(user)
-    if (isPromise(models)) {
-      models = await models
+    let modelsPack = getModelsPackForUser(user)
+    if (isPromise(modelsPack)) {
+      modelsPack = await modelsPack
     }
+
+    if (!modelsPack) return
 
     await sendModelsPackIfUpdated({
       user,
-      models: getModelsForUser(user),
+      modelsPack,
       propertyName,
       identifier,
       send: object => send({ req, to: user, object })
@@ -46,19 +48,17 @@ export const keepModelsFreshPlugin = ({
 
 export const sendModelsPackIfUpdated = async ({
   user,
-  models,
+  modelsPack,
   send,
   identifier,
   propertyName=defaultPropertyName,
 }: {
   user: any,
-  models: any,
+  modelsPack: any,
   send: (pack:any) => Promise<any>,
   identifier?: string,
   propertyName?: string
 }) => {
-  if (!Object.keys(models).length) return
-
   if (!identifier) identifier = getDefaultIdentifierFromUser(user)
 
   if (!user[propertyName] || typeof user[propertyName] !== 'object') {
@@ -66,16 +66,10 @@ export const sendModelsPackIfUpdated = async ({
   }
 
   const versionId = user[propertyName][identifier]
-  let pack = mapModelsToPack.get(models)
-  if (!pack) {
-    pack = ModelsPack.pack({ models })
-    mapModelsToPack.set(models, pack)
-  }
+  if (modelsPack.versionId === versionId) return
 
-  if (pack.versionId === versionId) return
-
-  user[propertyName][identifier] = pack.versionId
-  return await send(pack)
+  user[propertyName][identifier] = modelsPack.versionId
+  return await send(modelsPack)
 }
 
 export const createGetIdentifierFromReq = ({ employeeManager }) => {
@@ -91,7 +85,7 @@ export const createGetIdentifierFromReq = ({ employeeManager }) => {
   }
 }
 
-export const createGetModelsForUser = ({ bot, productsAPI, employeeManager }) => {
+export const createModelsPackGetter = ({ bot, productsAPI, employeeManager }) => {
   // const employeeModels = _.omit(bot.models, BASE_MODELS_IDS)
   // const customerModels = employeeModels
   // const customerModels = _.omit(
@@ -100,11 +94,11 @@ export const createGetModelsForUser = ({ bot, productsAPI, employeeManager }) =>
   //     .concat(BASE_MODELS_IDS)
   // )
 
-  return user => {
+  return async (user) => {
     if (employeeManager.isEmployee(user)) {
-      return bot.modelStore.getAllCustomModels()
+      return await bot.modelStore.getCumulativeModelsPack()
     }
 
-    return bot.modelStore.getMyCustomModels()
+    return bot.modelStore.myModelsPack
   }
 }

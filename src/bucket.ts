@@ -4,6 +4,7 @@ import _ = require('lodash')
 import createS3Utils from './s3-utils'
 import Logger from './logger'
 import { cachify } from './utils'
+import Errors = require('./errors')
 
 export class Bucket {
   public id:string // alias
@@ -63,7 +64,13 @@ export class Bucket {
   public urlForKey = (key:string) => this.utils.urlForKey({ key, bucket: this.name })
   public forEach = (opts) => this.utils.forEachItemInBucket({ bucket: this.name, ...opts })
   public putIfDifferent = async (key, value):Promise<boolean> => {
-    const current = await this.get(key)
+    let current
+    try {
+      current = await this.get(key)
+    } catch (err) {
+      Errors.ignore(err, Errors.NotFound)
+    }
+
     if (!_.isEqual(current, value)) {
       this.put(key, value)
       return true

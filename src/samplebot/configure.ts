@@ -32,14 +32,15 @@ const baseStylePackObj = {
 }
 
 export type UpdateConfInput = {
-  style: any
-  models: any
-  bot: any
-  terms: any
+  style?: any
+  modelsPack?: any
+  bot?: any
+  terms?: any
 }
 
 export const BOT_CONF_KEY = 'conf/bot.json'
-export const MODELS_KEY = 'conf/models.json'
+// export const MODELS_KEY = 'conf/models.json'
+export const MODELS_PACK_KEY = 'conf/models-pack.json'
 export const LENSES_KEY = 'conf/lenses.json'
 export const STYLE_KEY = 'conf/style.json'
 export const ORG_KEY = 'org/org.json'
@@ -72,9 +73,9 @@ const parts = {
     key: BOT_CONF_KEY,
     ttl: DEFAULT_TTL
   },
-  models: {
+  modelsPack: {
     bucket: 'PrivateConf',
-    key: MODELS_KEY,
+    key: MODELS_PACK_KEY,
     ttl: DEFAULT_TTL
   },
   lenses: {
@@ -96,7 +97,7 @@ export class Conf {
   public logger: Logger
   public privateConfBucket: Bucket
   public botConf: CacheableBucketItem
-  public models: CacheableBucketItem
+  public modelsPack: CacheableBucketItem
   public lenses: CacheableBucketItem
   public style: CacheableBucketItem
   public org: CacheableBucketItem
@@ -171,22 +172,15 @@ export class Conf {
     await this.style.putIfDifferent(value)
   }
 
-  public setCustomModels = async (models:any):Promise<boolean> => {
-    const [
-      org,
-      current
-    ] = await Promise.all([
-      this.org.get(),
-      this.models.get().catch(err => {
-        Errors.ignore(err, Errors.NotFound)
-        return {}
-      })
-    ])
-
-    const { domain } = org
+  public setCustomModels = async (modelsPack):Promise<boolean> => {
+    const { domain } = await this.org.get()
     const namespace = toggleDomainVsNamespace(domain)
-    await this.modelStore.saveCustomModels({ models, namespace })
-    await this.models.putIfDifferent(models)
+    if (namespace !== modelsPack.namespace) {
+      throw new Error(`expected namespace "${namespace}"`)
+    }
+
+    await this.modelStore.saveCustomModels(modelsPack)
+    await this.modelsPack.putIfDifferent(modelsPack)
   }
 
   public setTermsAndConditions = async (value:string|Buffer):Promise<boolean> => {
@@ -288,14 +282,14 @@ export class Conf {
   }
 
   public update = async (update:UpdateConfInput) => {
-    const { style, models, bot, terms } = update
+    const { style, modelsPack, bot, terms } = update
     if (style) {
       await this.setStyle(style)
       await this.recalcPublicInfo()
     }
 
-    if (models) {
-      await this.setCustomModels(models)
+    if (modelsPack) {
+      await this.setCustomModels(modelsPack)
     }
 
     if (bot) {

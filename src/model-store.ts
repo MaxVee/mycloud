@@ -1,7 +1,7 @@
 import { EventEmitter} from 'events'
 import _ = require('lodash')
 import mergeModels = require('@tradle/merge-models')
-import ModelsPack = require('@tradle/models-pack')
+import Pack = require('@tradle/models-pack')
 import { TYPE } from '@tradle/constants'
 import {
   createModelStore as createStore,
@@ -27,23 +27,30 @@ const CUMULATIVE_GRAPHQL_SCHEMA_KEY = PRIVATE_CONF_BUCKET.graphqlSchema
 const MODELS_PACK = 'tradle.ModelsPack'
 const MODELS_PACK_CACHE_MAX_AGE = 60000
 const MODELS_FOLDER = 'models'
-const BUILT_IN_NAMESPACES = [
-  'tradle',
-  'io.tradle'
-]
-
 const MINUTE = 60000
+const getDomain = pack => {
+  if (typeof pack === 'object') {
+    pack = { ...pack, [TYPE]: MODELS_PACK }
+  }
 
-const firstValue = obj => {
-  for (let key in obj) return obj[key]
+  return Pack.getDomain(pack)
+}
+
+const getNamespace = pack => {
+  if (typeof pack === 'object') {
+    pack = { ...pack, [TYPE]: MODELS_PACK }
+  }
+
+  return Pack.getNamespace(pack)
 }
 
 // type CacheablePacks = {
 //   [domain:string]: CacheableBucketItem
 // }
 
-export type ModelsPackInput = {
-  models: any
+export type ModelsPack = {
+  models?: any
+  lenses?: any
   namespace?: string
 }
 
@@ -52,7 +59,7 @@ export class ModelStore extends EventEmitter {
   public cumulativeGraphqlSchemaKey: string
   public cumulativePack: CacheableBucketItem
   public cumulativeGraphqlSchema: CacheableBucketItem
-  public myModelsPack: any
+  public myModelsPack: ModelsPack
   private tradle: Tradle
   private logger: Logger
   private cache: DBModelStore
@@ -95,19 +102,25 @@ export class ModelStore extends EventEmitter {
   }
 
   public get = async (id) => {
-    const namespace = ModelsPack.getNamespace(id)
-    if (ModelsPack.isReservedNamespace(namespace)) {
-      return this.cache.models[id]
+    const namespace = Pack.getNamespace(id)
+    let model = this.cache.models[id]
+    if (!model) {
+      await this.onMissingModel(id)
+      model = this.cache.models[id]
     }
 
-    return await this.cache.get(id)
+    if (!model) {
+      throw new Errors.NotFound(`model with id: ${id}`)
+    }
+
+    return model
   }
 
   public get models () {
     return this.cache.models
   }
 
-  public getCustomModels () {
+  public getMyCustomModels () {
     return _.clone(this.myCustomModels)
   }
 
@@ -135,14 +148,14 @@ export class ModelStore extends EventEmitter {
     const current = await this.getCumulativeModelsPack()
     let cumulative
     if (current) {
-      const { namespace } = modelsPack
-      const models = current.models
-        .filter(model => ModelsPack.getNamespace(model) !== namespace)
-        .concat(modelsPack.models)
+      cumulative = omitNamespace({
+        modelsPack: current,
+        namespace: modelsPack.namespace
+      })
 
-      cumulative = ModelsPack.pack({ models })
+      extendModelsPack(cumulative, modelsPack)
     } else {
-      cumulative = modelsPack
+      cumulative = _.omit(modelsPack, ['namespace'])
     }
 
     await Promise.all([
@@ -166,9 +179,16 @@ export class ModelStore extends EventEmitter {
   public loadModelsPacks = async () => {
     const cumulative = await this.getCumulativeModelsPack()
     if (cumulative) {
-      _.each(cumulative, ({ models }) => this.addModels(models))
+      this.addModels(cumulative.models)
     }
   }
+
+  // public getAllCustomModels = async () => {
+  //   const modelsPack = await this.getCumulativeModelsPack()
+  //   if (modelsPack) {
+  //     return _.omit(modelsPack.models, )
+  //   }
+  // }
 
   public getCumulativeModelsPack = async () => {
     try {
@@ -198,17 +218,17 @@ export class ModelStore extends EventEmitter {
   public getModelsForNamespace = (namespace:string) => {
     const prefix = namespace + '.'
     const models = _.filter(this.models, (value:any, key:string) => key.startsWith(prefix))
-    return ModelsPack.pack({ namespace, models })
+    return Pack.pack({ namespace, models })
   }
 
-  public saveCustomModels = async (opts: ModelsPackInput) => {
-    const { namespace, models } = opts
-    // if (!namespace) namespace = this.myNamespace
+  public saveCustomModels = async (modelsPack: ModelsPack) => {
+    modelsPack = Pack.pack(modelsPack)
+    const { namespace, models, lenses } = modelsPack
     if (namespace) {
       this.setMyNamespace(namespace)
     }
 
-    this.setCustomModels(opts)
+    this.setCustomModels(modelsPack)
 
     await this.addModelsPack({
       validateAuthor: false,
@@ -216,26 +236,21 @@ export class ModelStore extends EventEmitter {
     })
   }
 
-  public setCustomModels = ({ models, namespace }: ModelsPackInput) => {
-    // ModelsPack.validate(ModelsPack.pack({ models }))
-    const first = firstValue(models)
-    if (!first) return
+  public setCustomModels = (modelsPack: ModelsPack) => {
+    modelsPack = Pack.pack(modelsPack)
+    const {
+      namespace=getNamespace(modelsPack),
+      models=[],
+      lenses=[]
+    } = modelsPack
 
     if (!namespace) {
-      namespace = this.myNamespace || ModelsPack.getNamespace(first)
+      throw new Error('expected "namespace"')
     }
-
-    // validate
-    mergeModels()
-      .add(this.baseModels, { validate: false })
-      .add(models)
-
-    const pack = ModelsPack.pack({ namespace, models })
-    ModelsPack.validate(pack)
 
     this.cache.removeModels(this.myCustomModels)
     this.addModels(models)
-    this.myModelsPack = pack
+    this.myModelsPack = modelsPack
     this.myNamespace = namespace
     this.myCustomModels = _.clone(models)
   }
@@ -252,8 +267,8 @@ export class ModelStore extends EventEmitter {
 
   // public buildMyModelsPack = () => {
   //   const models = this.getCustomModels()
-  //   const namespace = this.myNamespace || ModelsPack.getNamespace(_.values(models))
-  //   return ModelsPack.pack({ namespace, models })
+  //   const namespace = this.myNamespace || Pack.getNamespace(_.values(models))
+  //   return Pack.pack({ namespace, models })
   // }
 
   public addModels = (models) => {
@@ -269,7 +284,7 @@ export class ModelStore extends EventEmitter {
       throw new Error(`ignoring ModelsPack sent by ${pack._author}, as it isn't namespaced`)
     }
 
-    const domain = ModelsPack.getDomain(pack)
+    const domain = getDomain(pack)
     const friend = await this.tradle.friends.getByDomain(domain)
     if (!pack._author) {
       await this.tradle.identities.addAuthorInfo(pack)
@@ -286,7 +301,7 @@ Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identity
       changed: true
     }
 
-    const domain = ModelsPack.getDomain(pack)
+    const domain = getDomain(pack)
     try {
       const current = await this.getModelsPackByDomain(domain)
       validateUpdate(current, pack)
@@ -315,18 +330,18 @@ Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identity
   }
 
   private onMissingModel = async (id):Promise<void> => {
-    const modelsPack = await this.getModelsPackByDomain(ModelsPack.getDomain(id))
+    const modelsPack = await this.getModelsPackByDomain(getDomain(id))
     this.cache.addModels(modelsPack.models)
   }
 }
 
 const getModelsPackConfKey = domainOrPack => {
   if (typeof domainOrPack === 'string') {
-    return `${MODELS_FOLDER}/${domainOrPack}/pack.json`
+    return `${MODELS_FOLDER}/${domainOrPack}/models-pack.json`
   }
 
   if (domainOrPack[TYPE] === MODELS_PACK) {
-    return getModelsPackConfKey(ModelsPack.getDomain(domainOrPack))
+    return getModelsPackConfKey(getDomain(domainOrPack))
   }
 
   throw new Error('expected domain or ModelsPack')
@@ -342,9 +357,29 @@ export const validateUpdate = (current, updated) => {
 }
 
 const getCumulative = (modelStore:ModelStore, foreign, customOnly) => {
-  const domestic = customOnly ? modelStore.getCustomModels() : modelStore.models
+  const domestic = customOnly ? modelStore.getMyCustomModels() : modelStore.models
   return {
     ...toModelsMap(_.get(foreign, 'models', [])),
     ...domestic
   }
+}
+
+const omitNamespace = ({ modelsPack, namespace }) => {
+  let { models=[], lenses=[] } = modelsPack
+  models = models
+    .filter(model => Pack.getNamespace(model.id) !== namespace)
+
+  lenses = lenses
+    .filter(lens => Pack.getNamespace(lens.id) !== namespace)
+
+  return Pack.pack({ models, lenses })
+}
+
+const extendModelsPack = (modelsPack, ...sourcePacks) => {
+  sourcePacks.forEach(source => {
+    modelsPack.models = (modelsPack.models || []).concat(source.models || [])
+    modelsPack.lenses = (modelsPack.lenses || []).concat(source.lenses || [])
+  })
+
+  return modelsPack
 }

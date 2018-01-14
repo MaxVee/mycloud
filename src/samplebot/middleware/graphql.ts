@@ -5,7 +5,7 @@ import { bodyParser } from '../../bot/middleware/body-parser'
 import { Lambda } from '../../bot/lambda'
 import {
   sendModelsPackIfUpdated,
-  createGetModelsForUser,
+  createModelsPackGetter,
   defaultPropertyName,
   getDefaultIdentifierFromUser
 } from '../strategy/keep-models-fresh'
@@ -19,13 +19,13 @@ export const keepModelsFresh = (lambda:Lambda, components) => {
     employeeManager,
   } = components
 
-  const getModelsForUser = createGetModelsForUser({ bot, ...components })
+  const getModelsPackForUser = createModelsPackGetter({ bot, ...components })
   return async (ctx, next) => {
     const { user } = ctx
     if (user) {
       const sent = await sendModelsPackIfUpdated({
         user,
-        models: getModelsForUser(user),
+        models: getModelsPackForUser(user),
         identifier: getDefaultIdentifierFromUser(user),
         send: object => bot.send({ to: user, object })
       })

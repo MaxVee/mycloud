@@ -9,8 +9,8 @@ const lambda = bot.createLambda({ source: EventSource.LAMBDA })
 const conf = createConf({ bot })
 
 lambda.use(async (ctx) => {
-  const { style, botConf, models, terms } = ctx.event
-  await conf.update({ style, bot: botConf, models, terms })
+  const { style, bot, modelsPack, terms } = ctx.event
+  await conf.update({ style, bot, modelsPack, terms })
   await conf.forceReinitializeContainers()
 })
 

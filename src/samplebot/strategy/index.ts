@@ -12,7 +12,7 @@ import {
   keepModelsFreshPlugin,
   sendModelsPackIfUpdated,
   createGetIdentifierFromReq,
-  createGetModelsForUser
+  createModelsPackGetter
 } from './keep-models-fresh'
 
 import createBot = require('../../bot')
@@ -45,18 +45,16 @@ const willHandleMessages = event => event === 'message'
 export default function createProductsBot ({
   bot,
   logger,
-  namespace,
   conf,
   termsAndConditions,
-  customModels={},
+  customModelsPack,
   style,
   event
 }: {
   bot: any,
   logger: Logger,
-  namespace: string,
   conf: any,
-  customModels?: any,
+  customModelsPack?: any,
   style?: any,
   termsAndConditions?: DatedValue,
   event?: string
@@ -81,13 +79,12 @@ export default function createProductsBot ({
   const mergeModelsOpts = { validate: bot.isTesting }
   const productsAPI = createProductsStrategy({
     bot,
-    namespace,
     models: {
       all: mergeModels()
         .add(baseModels, { validate: false })
         // .add(models, mergeModelsOpts)
         // .add(ONFIDO_ENABLED ? onfidoModels.all : {}, mergeModelsOpts)
-        .add(customModels, mergeModelsOpts)
+        .add(customModelsPack ? customModelsPack.models : {}, mergeModelsOpts)
         .get()
     },
     products: enabled,
@@ -138,10 +135,10 @@ export default function createProductsBot ({
     })
 
     productsAPI.removeDefaultHandler('onCommand')
-    const getModelsForUser = createGetModelsForUser({ bot, productsAPI, employeeManager })
+    const getModelsPackForUser = createModelsPackGetter({ bot, productsAPI, employeeManager })
     const keepModelsFresh = keepModelsFreshPlugin({
       getIdentifier: createGetIdentifierFromReq({ employeeManager }),
-      getModelsForUser,
+      getModelsPackForUser,
       send
     })
 
@@ -269,9 +266,10 @@ export default function createProductsBot ({
         }
 
         if (application.requestFor === EMPLOYEE_ONBOARDING) {
+          const modelsPack = await getModelsPackForUser(user)
           await sendModelsPackIfUpdated({
             user,
-            models: getModelsForUser(user),
+            modelsPack,
             send: object => send({ req, to: user, application, object })
           })
         }

@@ -31,9 +31,10 @@ import { settle as allSettled } from 'settle-promise'
 import isGenerator = require('is-generator-function')
 import { encode as encodeDataURI, decode as decodeDataURI } from 'strong-data-uri'
 import { marshalItem, unmarshalItem } from 'dynamodb-marshaler'
+import validateResource = require('@tradle/validate-resource')
 import buildResource = require('@tradle/build-resource')
 import fetch = require('node-fetch')
-import { prettify, stableStringify } from './string-utils'
+import { prettify, stableStringify, safeStringify } from './string-utils'
 import { SIG, TYPE, TYPES, WARMUP_SLEEP, PUBLIC_CONF_BUCKET } from './constants'
 import Errors = require('./errors')
 import { CacheContainer } from './types'
@@ -991,9 +992,10 @@ export const toModelsMap = models => _.transform(models, (result, model:any) => 
 }, {})
 
 export const ensureNoVirtualProps = resource => {
-  // if (!_.isEqual(resource, omitVirtualDeep(resource))) {
-  //   throw new Errors.InvalidObjectFormat(`virtual property not allowed: ${this.key}`)
-  // }
+  if (validateResource.utils.hasVirtualDeep(resource)) {
+    debugger
+    throw new Errors.InvalidObjectFormat(`virtual properties not allowed: ${safeStringify(resource)}`)
+  }
 }
 
 // export const omitVirtualRecursive = resource => {

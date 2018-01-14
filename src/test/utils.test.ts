@@ -24,8 +24,7 @@ import {
   timeoutIn,
   batchProcess,
   toModelsMap,
-  stableStringify,
-  omitVirtualRecursive
+  stableStringify
 } from '../utils'
 import Errors = require('../errors')
 import { Tradle, createTestTradle } from '../'
@@ -778,16 +777,20 @@ test('ModelStore', loudAsync(async (t) => {
 
   // 5
   t.equal(await store.getCumulativeModelsPack(), null)
-  store.setCustomModels({ models: PingPongModels })
+  store.setCustomModels({ namespace: 'ping.pong', models: PingPongModels })
   // 6
   t.equal(await store.getCumulativeModelsPack(), null)
 
   console.log('patience...')
   await store.addModelsPack({ modelsPack })
   // 7
-  t.same(await store.getCumulativeModelsPack(), modelsPack, 'models pack added to cumulative pack')
+  t.same(
+    await store.getCumulativeModelsPack(),
+    _.omit(modelsPack, 'namespace'),
+    'models pack added to cumulative pack'
+  )
 
-  await store.saveCustomModels({ models: PingPongModels })
+  await store.saveCustomModels({ namespace: 'ping.pong', models: PingPongModels })
 
   let cumulative = await store.getCumulativeModelsPack()
   let isCumulative = modelsPack.models.concat(_.values(PingPongModels)).every(model => {

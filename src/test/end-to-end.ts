@@ -676,7 +676,7 @@ class User extends EventEmitter {
     //   keyPrefix: `test-${this.permalink}`
     // })
 
-    return message
+    return message //omitVirtualRecursive(message)
   }
 
   public sendSelfIntroduction = function () {
