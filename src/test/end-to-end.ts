@@ -14,6 +14,7 @@ const co = require('co').wrap
 const { TYPE, TYPES, SIG, SEQ } = require('@tradle/constants')
 const { MESSAGE } = TYPES
 const buildResource = require('@tradle/build-resource')
+import validateResource = require('@tradle/validate-resource')
 const mergeModels = require('@tradle/merge-models')
 const tradleUtils = require('@tradle/engine').utils
 const createProductsStrategy = require('@tradle/bot-products')
@@ -623,7 +624,7 @@ class User extends EventEmitter {
       clientId: this.clientId,
       data: await IotMessage.encode({
         type: 'messages',
-        payload: [message]
+        payload: [message].map(item => validateResource.utils.omitVirtualDeep(item))
       })
     })
 

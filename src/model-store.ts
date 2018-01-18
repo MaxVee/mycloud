@@ -26,7 +26,6 @@ const CUMULATIVE_PACK_KEY = PRIVATE_CONF_BUCKET.modelsPack
 const CUMULATIVE_GRAPHQL_SCHEMA_KEY = PRIVATE_CONF_BUCKET.graphqlSchema
 const MODELS_PACK = 'tradle.ModelsPack'
 const MODELS_PACK_CACHE_MAX_AGE = 60000
-const MODELS_FOLDER = 'models'
 const MINUTE = 60000
 const getDomain = pack => {
   if (typeof pack === 'object') {
@@ -131,11 +130,13 @@ export class ModelStore extends EventEmitter {
   public addModelsPack = async ({
     modelsPack,
     validateAuthor=true,
-    validateUpdate=true
+    validateUpdate=true,
+    key
   }: {
     modelsPack: any,
     validateAuthor?: boolean,
     validateUpdate?: boolean,
+    key?: string
   }) => {
     if (validateAuthor) {
       await this.validateModelsPackNamespaceOwner(modelsPack)
@@ -159,8 +160,10 @@ export class ModelStore extends EventEmitter {
     }
 
     this.logger.debug(`added ${modelsPack.namespace} models pack`)
+    if (!key) key = getModelsPackConfKey(modelsPack)
+
     await Promise.all([
-      this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack),
+      this.bucket.gzipAndPut(key, modelsPack),
       this.bucket.gzipAndPut(this.cumulativePackKey, cumulative),
       // this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
     ])
@@ -224,7 +227,10 @@ export class ModelStore extends EventEmitter {
     return Pack.pack({ namespace, models })
   }
 
-  public saveCustomModels = async (modelsPack: ModelsPack) => {
+  public saveCustomModels = async ({
+    modelsPack,
+    key
+  }: { modelsPack:ModelsPack, key?:string }) => {
     modelsPack = Pack.pack(modelsPack)
     const { namespace, models, lenses } = modelsPack
     if (namespace) {
@@ -235,7 +241,8 @@ export class ModelStore extends EventEmitter {
 
     await this.addModelsPack({
       validateAuthor: false,
-      modelsPack: this.myModelsPack
+      modelsPack: this.myModelsPack,
+      key
     })
   }
 
@@ -321,6 +328,8 @@ Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identity
     return await this.validateModelsPackUpdate(modelsPack)
   }
 
+  public getModelsPackConfKey = getModelsPackConfKey
+
   /**
    * Save a models pack to storage
    */
@@ -361,9 +370,9 @@ Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identity
   }
 }
 
-const getModelsPackConfKey = domainOrPack => {
+export const getModelsPackConfKey = domainOrPack => {
   if (typeof domainOrPack === 'string') {
-    return `${MODELS_FOLDER}/${domainOrPack}/models-pack.json`
+    return `${PRIVATE_CONF_BUCKET.assetsFolder}/${domainOrPack}/models-pack.json`
   }
 
   if (domainOrPack[TYPE] === MODELS_PACK) {

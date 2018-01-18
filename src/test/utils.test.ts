@@ -780,7 +780,9 @@ test('ModelStore', loudAsync(async (t) => {
     'models pack added to cumulative pack'
   )
 
-  await store.saveCustomModels({ namespace: 'ping.pong', models: PingPongModels })
+  await store.saveCustomModels({
+    modelsPack: { namespace: 'ping.pong', models: PingPongModels }
+  })
 
   let cumulative = await store.getCumulativeModelsPack()
   let isCumulative = modelsPack.models.concat(_.values(PingPongModels)).every(model => {

@@ -14,6 +14,9 @@ import { Bucket } from '../bucket'
 import { CacheableBucketItem } from '../cacheable-bucket-item'
 import Logger from '../logger'
 import { ModelStore, toggleDomainVsNamespace } from '../model-store'
+import {
+  PRIVATE_CONF_BUCKET
+} from './constants'
 
 const { LOGO_UNKNOWN } = require('./media')
 const DEFAULT_CONF = require('./conf/provider')
@@ -38,15 +41,6 @@ export type UpdateConfInput = {
   terms?: any
 }
 
-export const BOT_CONF_KEY = 'conf/bot.json'
-// export const MODELS_KEY = 'conf/models.json'
-export const MODELS_PACK_KEY = 'conf/models-pack.json'
-export const LENSES_KEY = 'conf/lenses.json'
-export const STYLE_KEY = 'conf/style.json'
-export const ORG_KEY = 'org/org.json'
-export const INFO_KEY = 'info/info.json'
-export const TERMS_AND_CONDITIONS_KEY = 'conf/terms-and-conditions.md'
-
 const MINUTE = 3600000
 const HALF_HOUR = MINUTE * 30
 const HOUR = HALF_HOUR * 2
@@ -55,37 +49,32 @@ const DEFAULT_TTL = HALF_HOUR
 const parts = {
   org: {
     bucket: 'PrivateConf',
-    key: ORG_KEY,
+    key: PRIVATE_CONF_BUCKET.org,
     ttl: DEFAULT_TTL
   },
   style: {
     bucket: 'PrivateConf',
-    key: STYLE_KEY,
+    key: PRIVATE_CONF_BUCKET.style,
     ttl: DEFAULT_TTL
   },
   info: {
     bucket: 'PrivateConf',
-    key: INFO_KEY,
+    key: PRIVATE_CONF_BUCKET.info,
     ttl: DEFAULT_TTL
   },
   botConf: {
     bucket: 'PrivateConf',
-    key: BOT_CONF_KEY,
+    key: PRIVATE_CONF_BUCKET.bot,
     ttl: DEFAULT_TTL
   },
   modelsPack: {
     bucket: 'PrivateConf',
-    key: MODELS_PACK_KEY,
-    ttl: DEFAULT_TTL
-  },
-  lenses: {
-    bucket: 'PrivateConf',
-    key: LENSES_KEY,
+    key: PRIVATE_CONF_BUCKET.myModelsPack,
     ttl: DEFAULT_TTL
   },
   termsAndConditions: {
     bucket: 'PrivateConf',
-    key: TERMS_AND_CONDITIONS_KEY,
+    key: PRIVATE_CONF_BUCKET.termsAndConditions,
     ttl: DEFAULT_TTL,
     parse: value => value.toString()
   }
@@ -179,7 +168,11 @@ export class Conf {
       throw new Error(`expected namespace "${namespace}"`)
     }
 
-    await this.modelStore.saveCustomModels(modelsPack)
+    await this.modelStore.saveCustomModels({
+      modelsPack,
+      key: PRIVATE_CONF_BUCKET.myModelsPack
+    })
+
     await this.modelsPack.putIfDifferent(modelsPack)
   }
 
@@ -199,7 +192,7 @@ export class Conf {
   public calcPublicInfo = async ():Promise<any> => {
     const [org, style, identity, conf] = await Promise.all([
       this.org.get(),
-      this.style.get(),
+      this.style.get().catch(err => Errors.ignore(err, Errors.NotFound)),
       this.bot.getMyIdentity(),
       this.botConf.get()
     ])
