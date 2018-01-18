@@ -753,7 +753,7 @@ test('ModelStore', loudAsync(async (t) => {
   })
 
   try {
-    await store.saveModelsPack({ modelsPack })
+    await store.addModelsPack({ modelsPack })
     t.fail('expected error')
   } catch (err) {
     // 2
@@ -763,7 +763,7 @@ test('ModelStore', loudAsync(async (t) => {
   modelsPack.namespace = namespace
   modelsPack._author = 'abc'
   try {
-    await store.saveModelsPack({ modelsPack })
+    await store.addModelsPack({ modelsPack })
     t.fail('expected error')
   } catch (err) {
     // 3
@@ -771,19 +771,9 @@ test('ModelStore', loudAsync(async (t) => {
   }
 
   modelsPack._author = friend1._identityPermalink
-  await store.saveModelsPack({ modelsPack })
+  await store.addModelsPack({ modelsPack })
   // 4
   t.same(await store.getModelsPackByDomain(friend1.domain), modelsPack)
-
-  // 5
-  t.equal(await store.getCumulativeModelsPack(), null)
-  store.setCustomModels({ namespace: 'ping.pong', models: PingPongModels })
-  // 6
-  t.equal(await store.getCumulativeModelsPack(), null)
-
-  console.log('patience...')
-  await store.addModelsPack({ modelsPack })
-  // 7
   t.same(
     await store.getCumulativeModelsPack(),
     _.omit(modelsPack, 'namespace'),

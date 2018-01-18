@@ -7,7 +7,7 @@ import {
   createModelStore as createStore,
   ModelStore as DBModelStore
 } from '@tradle/dynamodb'
-import Logger from './logger'
+import Logger, { Level } from './logger'
 import Friends from './friends'
 import { Buckets } from './buckets'
 import { CacheableBucketItem } from './cacheable-bucket-item'
@@ -158,7 +158,9 @@ export class ModelStore extends EventEmitter {
       cumulative = _.omit(modelsPack, ['namespace'])
     }
 
+    this.logger.debug(`added ${modelsPack.namespace} models pack`)
     await Promise.all([
+      this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack),
       this.bucket.gzipAndPut(this.cumulativePackKey, cumulative),
       this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
     ])
@@ -179,6 +181,7 @@ export class ModelStore extends EventEmitter {
   public loadModelsPacks = async () => {
     const cumulative = await this.getCumulativeModelsPack()
     if (cumulative) {
+      this.logger.debug('loaded cumulative models pack')
       this.addModels(cumulative.models)
     }
   }
@@ -321,13 +324,36 @@ Domain ${domain} (and namespace ${pack.namespace}) belongs to ${friend._identity
   /**
    * Save a models pack to storage
    */
-  public saveModelsPack = async ({ modelsPack }) => {
-    const { changed } = await this.validateModelsPack(modelsPack)
-    if (!changed) return
+  // public saveModelsPack = async ({
+  //   modelsPack,
+  //   addToCumulative,
+  //   validateAuthor,
+  //   validateUpdate
+  // }) => {
+  //   const { changed } = await this.validateModelsPack(modelsPack)
+  //   if (!changed) return false
 
-    await this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack)
-    // await this.addModelsPack({ modelsPack })
-  }
+  //   const tasks = [
+  //     this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack)
+  //   ]
+
+  //   if (addToCumulative) {
+  //     tasks.push(this.addModelsPack({ modelsPack }))
+  //   }
+
+  //   await Promise.all(tasks)
+  //   return true
+  // }
+
+  // private _saveModelsPack = async ({ modelsPack }) => {
+  //   // const stop = this.logger.timeDebug(`saving ${modelsPack.namespace} models pack`)
+  //   await Promise.all([
+  //     this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack),
+  //     this.addModelsPack({ modelsPack })
+  //   ])
+
+  //   // stop()
+  // }
 
   private onMissingModel = async (id):Promise<void> => {
     const modelsPack = await this.getModelsPackByDomain(getDomain(id))
