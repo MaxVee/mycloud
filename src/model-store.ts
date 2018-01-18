@@ -162,7 +162,7 @@ export class ModelStore extends EventEmitter {
     await Promise.all([
       this.bucket.gzipAndPut(getModelsPackConfKey(modelsPack), modelsPack),
       this.bucket.gzipAndPut(this.cumulativePackKey, cumulative),
-      this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
+      // this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
     ])
 
     return cumulative
