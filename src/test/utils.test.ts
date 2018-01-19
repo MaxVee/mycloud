@@ -32,33 +32,13 @@ import { Bucket } from '../bucket'
 import { createSilentLogger } from './utils'
 import { ModelStore, createModelStore } from '../model-store'
 import PingPongModels = require('../bot/ping-pong-models')
+import constants = require('../constants')
 
 const { KVTable } = require('../definitions')
 const aliceKeys = require('./fixtures/alice/keys')
 
 const tradle = new Tradle()
 const { dbUtils } = tradle
-
-// test('omitVirtualRecursive', t => {
-//   const obj = {
-//     [SIG]: 'somesig',
-//     a: {
-//       [SIG]: 'somesig1',
-//       b: {
-//         blah: 1,
-//         _author: 'allowedauthorprop'
-//       }
-//     }
-//   }
-
-//   const withVirtual:any = _.cloneDeep(obj)
-//   withVirtual._author = 'someone'
-//   withVirtual._link = 'link1'
-//   withVirtual._permalink = 'link2'
-//   withVirtual.a._author = 'someoneelse'
-//   t.same(omitVirtualRecursive(withVirtual), obj)
-//   t.end()
-// })
 
 test('cachify', loudAsync(async (t) => {
   const data = {
@@ -288,7 +268,7 @@ test('batch by size', function (t) {
 test('getCacheable', loudAsync(async (t) => {
   const { aws } = tradle
   const { s3 } = aws
-  const bucketName = `test-${Date.now()}-${randomString(10)}`
+  const bucketName = `test-${randomString(10)}`
   const bucket = new Bucket({ name: bucketName, s3 })
   await bucket.create()
 
@@ -696,18 +676,45 @@ test('batchProcess', loudAsync(async (t) => {
 }))
 
 test('ModelStore', loudAsync(async (t) => {
+  const testPrefix = 'test'
   const friend1 = {
-    _identityPermalink: Date.now() + '1',
-    domain: `${Date.now()}.example1.com`
+    _identityPermalink: testPrefix + '1',
+    domain: `${testPrefix}.example1.com`
   }
 
   const friend2 = {
     _identityPermalink: Date.now() + '2',
-    domain: `${Date.now()}.example2.com`
+    domain: `${testPrefix}.example2.com`
   }
 
   const tradle = createTestTradle()
   const store = createModelStore(tradle)
+  let memBucket = {}
+  const fakePut = async ({ key, value }) => {
+    memBucket[key] = value
+  }
+
+  const fakeGet = async ({ key }) => {
+    if (!(key in memBucket)) {
+      throw new Errors.NotFound(key)
+    }
+
+    return memBucket[key]
+  }
+
+  // sinon.stub(tradle.s3Utils, 'put').callsFake(fakePut)
+  // sinon.stub(tradle.s3Utils, 'gzipAndPut').callsFake(fakePut)
+  sinon.stub(tradle.s3Utils, 'get').callsFake(async ({ key }) => {
+    const Body = await fakeGet({ key })
+    return {
+      Body: new Buffer(JSON.stringify(Body))
+    }
+  })
+
+  // sinon.stub(tradle.s3Utils, 'getJSON').callsFake(fakeGet)
+  sinon.stub(store.bucket, 'get').callsFake(key => fakeGet({ key }))
+  sinon.stub(store.bucket, 'getJSON').callsFake(key => fakeGet({ key }))
+  sinon.stub(store.bucket, 'gzipAndPut').callsFake((key, value) => fakePut({ key, value }))
   sinon.stub(tradle.friends, 'getByDomain').callsFake(async (domain) => {
     if (domain === friend1.domain) return friend1
     if (domain === friend2.domain) return friend2
@@ -739,19 +746,6 @@ test('ModelStore', loudAsync(async (t) => {
     ]
   })
 
-  let memBucket = {}
-  sinon.stub(store.bucket, 'gzipAndPut').callsFake(async (key, value) => {
-    memBucket[key] = value
-  })
-
-  sinon.stub(store.bucket, 'getJSON').callsFake(async (key) => {
-    if (!(key in memBucket)) {
-      throw new Errors.NotFound(key)
-    }
-
-    return memBucket[key]
-  })
-
   try {
     await store.addModelsPack({ modelsPack })
     t.fail('expected error')
@@ -774,6 +768,7 @@ test('ModelStore', loudAsync(async (t) => {
   await store.addModelsPack({ modelsPack })
   // 4
   t.same(await store.getModelsPackByDomain(friend1.domain), modelsPack)
+  // 5
   t.same(
     await store.getCumulativeModelsPack(),
     _.omit(modelsPack, 'namespace'),
@@ -789,7 +784,7 @@ test('ModelStore', loudAsync(async (t) => {
     return cumulative.models.find(m => m.id === model.id)
   })
 
-  // 8
+  // 6
   t.equal(isCumulative, true, 'my custom models added to cumulative models pack')
 
   const namespace2 = domainToNamespace(friend2.domain)
@@ -820,6 +815,7 @@ test('ModelStore', loudAsync(async (t) => {
 
     t.fail('expected validation to fail')
   } catch (err) {
+    // 7
     t.ok(/domain|namespace/i.test(err.message))
   }
 
@@ -833,14 +829,15 @@ test('ModelStore', loudAsync(async (t) => {
       return cumulative.models.find(m => m.id === model.id)
     })
 
-  // 9
+  // 8
   t.equal(isCumulative, true)
 
   // console.log('patience...')
   // const schema = await store.getSavedGraphqlSchema()
 
-  // 10
+  // 9
   // t.ok(schema)
+
   t.end()
 }))
 

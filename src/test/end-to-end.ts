@@ -122,6 +122,8 @@ export class Test {
         message: 'hey'
       }
 
+      message = _.cloneDeep(message)
+      await bot.identities.addAuthorInfo(message)
       await employee.send({
         other: {
           forward: message._author

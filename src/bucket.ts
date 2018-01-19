@@ -12,11 +12,12 @@ export class Bucket {
   public logger:Logger
   public cache?: any
   private utils: any
-  constructor ({ name, s3, cache, logger }: {
+  constructor ({ name, s3, cache, logger, s3Utils }: {
     name:string,
     s3:AWS.S3,
     cache?:any
-    logger?:Logger
+    logger?:Logger,
+    s3Utils?:any
   }) {
     if (typeof name !== 'string') {
       throw new Error('expected string "name"')
@@ -25,7 +26,7 @@ export class Bucket {
     this.name = name
     this.id = name // alias
     this.logger = logger || new Logger(`bucket:${name}`)
-    this.utils = createS3Utils({ s3, logger: this.logger })
+    this.utils = s3Utils || createS3Utils({ s3, logger: this.logger })
     if (cache) {
       this.cache = cache
       const cachified = cachify({

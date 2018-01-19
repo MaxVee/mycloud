@@ -22,8 +22,7 @@ import {
   toModelsMap
 } from './utils'
 
-const CUMULATIVE_PACK_KEY = PRIVATE_CONF_BUCKET.modelsPack
-const CUMULATIVE_GRAPHQL_SCHEMA_KEY = PRIVATE_CONF_BUCKET.graphqlSchema
+const parseJSON = obj => JSON.parse(obj)
 const MODELS_PACK = 'tradle.ModelsPack'
 const MODELS_PACK_CACHE_MAX_AGE = 60000
 const MINUTE = 60000
@@ -56,9 +55,10 @@ export type ModelsPack = {
 export class ModelStore extends EventEmitter {
   public cumulativePackKey: string
   public cumulativeGraphqlSchemaKey: string
-  public cumulativePack: CacheableBucketItem
-  public cumulativeGraphqlSchema: CacheableBucketItem
+  public cumulativePackItem: CacheableBucketItem
+  public cumulativeGraphqlSchemaItem: CacheableBucketItem
   public myModelsPack: ModelsPack
+  public cumulativeModelsPack: ModelsPack
   private tradle: Tradle
   private logger: Logger
   private cache: DBModelStore
@@ -81,18 +81,25 @@ export class ModelStore extends EventEmitter {
     })
 
     this.cache.on('update', () => this.emit('update'))
-    this.cumulativePackKey = CUMULATIVE_PACK_KEY
-    this.cumulativeGraphqlSchemaKey = CUMULATIVE_GRAPHQL_SCHEMA_KEY
-    this.cumulativePack = new CacheableBucketItem({
+    this.cumulativePackKey = PRIVATE_CONF_BUCKET.modelsPack
+    this.cumulativeGraphqlSchemaKey = PRIVATE_CONF_BUCKET.graphqlSchema
+    this.cumulativePackItem = new CacheableBucketItem({
       bucket: this.bucket,
       key: this.cumulativePackKey,
-      ttl: 5 * MINUTE
+      ttl: 5 * MINUTE,
+      parse: parseJSON
     })
 
-    this.cumulativeGraphqlSchema = new CacheableBucketItem({
+    this.cumulativeGraphqlSchemaItem = new CacheableBucketItem({
       bucket: this.bucket,
       key: this.cumulativeGraphqlSchemaKey,
-      ttl: 5 * MINUTE
+      ttl: 5 * MINUTE,
+      parse: parseJSON
+    })
+
+    this.on('update:cumulative', pack => {
+      this.cumulativeModelsPack = pack
+      this.addModels(pack.models)
     })
   }
 
@@ -168,6 +175,7 @@ export class ModelStore extends EventEmitter {
       // this.updateGraphqlSchema({ cumulativeModelsPack: cumulative })
     ])
 
+    this.emit('update:cumulative', cumulative)
     return cumulative
   }
 
@@ -185,20 +193,13 @@ export class ModelStore extends EventEmitter {
     const cumulative = await this.getCumulativeModelsPack()
     if (cumulative) {
       this.logger.debug('loaded cumulative models pack')
-      this.addModels(cumulative.models)
+      this.emit('update:cumulative', cumulative)
     }
   }
 
-  // public getAllCustomModels = async () => {
-  //   const modelsPack = await this.getCumulativeModelsPack()
-  //   if (modelsPack) {
-  //     return _.omit(modelsPack.models, )
-  //   }
-  // }
-
-  public getCumulativeModelsPack = async () => {
+  public getCumulativeModelsPack = async (opts?:any) => {
     try {
-      return await this.bucket.getJSON(this.cumulativePackKey)
+      return await this.cumulativePackItem.get(opts)
     } catch (err) {
       Errors.ignore(err, Errors.NotFound)
       return null

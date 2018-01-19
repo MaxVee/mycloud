@@ -116,11 +116,13 @@ export const getGraphqlAPI = (opts) => {
     schema = getSchema()
   }
 
-  modelStore.on('update', () => setModels(modelStore.models))
-  setModels(modelStore.models)
+  if (modelStore.cumulativeModelsPack) {
+    setModels(modelStore.models)
+  }
+
+  modelStore.on('update:cumulative', () => setModels(modelStore.models))
 
   return {
-    loadModelsPacks: () => modelStore.loadModelsPacks(),
     setModels,
     get schema () {
       return getSchema()

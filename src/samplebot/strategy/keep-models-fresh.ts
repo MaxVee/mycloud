@@ -2,17 +2,15 @@ import _ = require('lodash')
 import ModelsPack = require('@tradle/models-pack')
 import baseModels = require('../../models')
 import { isPromise, stableStringify } from '../../utils'
+import { MODELS_HASH_PROPERTY as PROPERTY } from '../constants'
 
 const BASE_MODELS_IDS = Object.keys(baseModels)
 const mapModelsToPack = new Map()
 
-export const defaultPropertyName = 'modelsHash'
-export const getDefaultIdentifierFromUser = (user) => user.id
-export const getDefaultIdentifierFromReq = ({ user }) => getDefaultIdentifierFromUser(user)
+export const getDefaultIdentifierFromReq = ({ user }) => user.id
 
 export const keepModelsFreshPlugin = ({
   getModelsPackForUser,
-  propertyName=defaultPropertyName,
   // unique identifier for counterparty
   // which will be used to track freshness.
   // defaults to user.id
@@ -21,8 +19,7 @@ export const keepModelsFreshPlugin = ({
 }: {
   getModelsPackForUser: (user) => any,
   send: ({ req, to, object }) => Promise<any>
-  getIdentifier?: (req:any) => string,
-  propertyName?: string,
+  getIdentifier?: (req:any) => string
 }) => {
   // modelsObject => modelsArray
   // modelsArray => modelsHash
@@ -39,7 +36,6 @@ export const keepModelsFreshPlugin = ({
     await sendModelsPackIfUpdated({
       user,
       modelsPack,
-      propertyName,
       identifier,
       send: object => send({ req, to: user, object })
     })
@@ -50,33 +46,35 @@ export const sendModelsPackIfUpdated = async ({
   user,
   modelsPack,
   send,
-  identifier,
-  propertyName=defaultPropertyName,
+  identifier
 }: {
   user: any,
   modelsPack: any,
   send: (pack:any) => Promise<any>,
-  identifier?: string,
-  propertyName?: string
-}) => {
-  if (!identifier) identifier = getDefaultIdentifierFromUser(user)
+  identifier?: string
+}):Promise<boolean> => {
+  if (!modelsPack) debugger
+  if (!identifier) identifier = user.id
 
-  if (!user[propertyName] || typeof user[propertyName] !== 'object') {
-    user[propertyName] = {}
+  if (!user[PROPERTY] || typeof user[PROPERTY] !== 'object') {
+    user[PROPERTY] = {}
   }
 
-  const versionId = user[propertyName][identifier]
-  if (modelsPack.versionId === versionId) return
+  const versionId = user[PROPERTY][identifier]
+  if (modelsPack.versionId === versionId) {
+    return false
+  }
 
-  user[propertyName][identifier] = modelsPack.versionId
-  return await send(modelsPack)
+  user[PROPERTY][identifier] = modelsPack.versionId
+  await send(modelsPack)
+  return true
 }
 
 export const createGetIdentifierFromReq = ({ employeeManager }) => {
   return req => {
     const { user, message } = req
     const { originalSender } = message
-    let identifier = getDefaultIdentifierFromUser(user)
+    let identifier = user.id
     if (originalSender) {
       identifier += ':' + originalSender
     }
@@ -86,14 +84,6 @@ export const createGetIdentifierFromReq = ({ employeeManager }) => {
 }
 
 export const createModelsPackGetter = ({ bot, productsAPI, employeeManager }) => {
-  // const employeeModels = _.omit(bot.models, BASE_MODELS_IDS)
-  // const customerModels = employeeModels
-  // const customerModels = _.omit(
-  //   productsAPI.models.all,
-  //   Object.keys(productsAPI.models.private.all)
-  //     .concat(BASE_MODELS_IDS)
-  // )
-
   return async (user) => {
     if (employeeManager.isEmployee(user)) {
       return await bot.modelStore.getCumulativeModelsPack()

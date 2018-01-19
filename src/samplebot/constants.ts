@@ -1,14 +1,16 @@
 
-const PRIVATE_CONF_BUCKET = {
+import {
+  PRIVATE_CONF_BUCKET as defaults
+} from '../constants'
+
+export const PRIVATE_CONF_BUCKET = {
+  ...defaults,
   bot: 'conf/bot.json',
-  myModelsPack: 'conf/models-pack.json',
   style: 'conf/style.json',
   termsAndConditions: 'conf/terms-and-conditions.md',
-  assetsFolder: 'assets',
-  modelsPack: 'derived/cumulative-models-pack.json',
-  graphqlSchema: 'derived/cumulative-graphql-schema.json',
   org: 'org/org.json',
   info: 'info/info.json'
 }
 
-export { PRIVATE_CONF_BUCKET }
+export const MODELS_HASH_PROPERTY = 'modelsHash'
+export const STYLES_HASH_PROPERTY = 'stylesHash'
