@@ -62,7 +62,7 @@
     "@tradle/bot-products": {
       "version": "1.0.0",
       "from": "tradle/bot-products#modeled",
-      "resolved": "git://github.com/tradle/bot-products.git#435e83f1e7ea937e67d7f5a9ebb32ad41d3eb320",
+      "resolved": "git://github.com/tradle/bot-products.git#39d2b087c2784a64f3ed4d17cb74772657bab7a0",
       "dependencies": {
         "@tradle/build-resource": {
           "version": "2.13.1",
@@ -73,11 +73,6 @@
           "version": "2.15.1",
           "from": "@tradle/validate-resource@2.15.1",
           "resolved": "https://registry.npmjs.org/@tradle/validate-resource/-/validate-resource-2.15.1.tgz"
-        },
-        "bluebird": {
-          "version": "2.11.0",
-          "from": "bluebird@2.11.0",
-          "resolved": "https://registry.npmjs.org/bluebird/-/bluebird-2.11.0.tgz"
         },
         "debug": {
           "version": "3.1.0",
@@ -97,9 +92,9 @@
       }
     },
     "@tradle/build-resource": {
-      "version": "2.14.1",
+      "version": "2.14.3",
       "from": "@tradle/build-resource@latest",
-      "resolved": "https://registry.npmjs.org/@tradle/build-resource/-/build-resource-2.14.1.tgz"
+      "resolved": "https://registry.npmjs.org/@tradle/build-resource/-/build-resource-2.14.3.tgz"
     },
     "@tradle/cb-blockr": {
       "version": "3.2.1",
@@ -263,7 +258,7 @@
     "@tradle/models": {
       "version": "4.10.10",
       "from": "tradle/models",
-      "resolved": "git://github.com/tradle/models.git#227ad351c8f5efe5b5e4bfb6e78d5104606b101b"
+      "resolved": "git://github.com/tradle/models.git#b3529f89ee25a154b4f52bfea69ca0b37f6931cf"
     },
     "@tradle/models-cloud": {
       "version": "1.0.0",
@@ -328,6 +323,11 @@
       "version": "3.0.0",
       "from": "@tradle/protocol@>=3.0.0 <4.0.0",
       "resolved": "https://registry.npmjs.org/@tradle/protocol/-/protocol-3.0.0.tgz"
+    },
+    "@tradle/qr-schema": {
+      "version": "1.3.0",
+      "from": "@tradle/qr-schema@latest",
+      "resolved": "https://registry.npmjs.org/@tradle/qr-schema/-/qr-schema-1.3.0.tgz"
     },
     "@tradle/schema-graphql": {
       "version": "1.0.0",
