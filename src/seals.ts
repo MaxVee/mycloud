@@ -540,11 +540,12 @@ export default class Seals {
       this.objects.put(object)
     ])
 
+    // TODO remove this after catching the bug that causes lost properties
     const saved = await this.db.get(_.pick(object, [TYPE, '_permalink']))
     const lost = Object.keys(object).filter(p => !(p in saved))
     if (lost.length) {
-      this.logger.debug(`lost properties ${lost.join(', ')}`)
-      this.logger.debug(`before in s3: ${prettify(object)}, before in db: ${prettify(before)}, after: ${prettify(saved)}`)
+      this.logger.error(`lost properties ${lost.join(', ')}`)
+      this.logger.error(`before in s3: ${prettify(object)}, before in db: ${prettify(before)}, after: ${prettify(saved)}`)
     }
   }
 

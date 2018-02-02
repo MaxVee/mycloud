@@ -33,7 +33,7 @@ export class CordaRestClient {
   }
 
   public seal = async ({ link, counterparty }) => {
-    return await this.post(`${this.endpoint.apiUrl}/link`, {
+    return await this.post(`${this.endpoint.apiUrl}/item`, {
       link,
       partyTmpId: counterparty
     })
