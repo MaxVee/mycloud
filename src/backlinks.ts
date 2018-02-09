@@ -40,7 +40,17 @@ export type ForwardLinks = {
   [propertyName:string]: ForwardLink
 }
 
-export type Backlink = string[]
+export type Backlink = {
+  // the backlink key is stored as `${type}_${permalink}`
+  // this is the "link" part of the forward link
+  forwardLink: string
+  id: string
+}
+
+type Change = {
+  before?: ForwardLink
+  after?: ForwardLink
+}
 
 export class Backlinks {
   private store: KeyValueTable
@@ -61,27 +71,12 @@ export class Backlinks {
     return getForwardLinks({ models: this.models, resource })
   }
 
-  public updateBacklinksFromChange = async ({ model, before, after }) => {
-    const forwardLinksBefore = this.getForwardLinks(before)
-    const forwardLinksAfter = this.getForwardLinks(after)
-    const props = uniqueStrict(
-      Object.keys(forwardLinksBefore)
-        .concat(Object.keys(forwardLinksAfter))
-    )
+  public updateBacklinksFromChange = async ({ before, after }):Promise<Change[]> => {
+    const type = before[TYPE]
+    const model = this.models[type]
+    if (!model) throw new Error(`missing model: ${type}`)
 
-    const changes = props.map(propertyName => {
-      const valBefore = forwardLinksBefore[propertyName]
-      const valAfter = forwardLinksAfter[propertyName]
-      if (_.isEqual(valBefore, valAfter)) return
-
-      return {
-        before: valBefore,
-        after: valAfter
-      }
-    })
-    .filter(_.identity)
-
-    // TODO: apply changes
+    return getChanges({ before, after, model })
   }
 
   /**
@@ -108,7 +103,7 @@ export class Backlinks {
 
     const { id } = targetStub
     const key = getBacklinkKey({ ...targetParsedStub, property: back })
-    let current:Backlink
+    let current:Backlink[]
     try {
       current = await this.store.get(key)
     } catch (err) {
@@ -116,7 +111,11 @@ export class Backlinks {
       current = []
     }
 
-    const updated = updateBacklink(current, sourceStub.id)
+    const updated = updateBacklink(current, {
+      id: sourceStub.id,
+      forwardLink: targetParsedStub.link
+    })
+
     if (_.isEqual(current, updated)) return
 
     await this.store.put(key, updated)
@@ -219,15 +218,50 @@ export const getBacklinkForForwardLink = ({
     })
 }
 
-const updateBacklink = (ids:Backlink, id:string):Backlink => {
-  const stubs = ids.map(parseId)
-  const update = parseId(id)
+const updateBacklink = (current:Backlink[], backlink:Backlink):Backlink[] => {
+  const stubs = current.map(({ id }) => parseId(id))
+  const update = parseId(backlink.id)
   const idx = stubs.findIndex(stub => stub.permalink === update.permalink)
   if (idx === -1) {
-    return ids.concat(id)
+    return current.concat(backlink)
   }
 
-  if (stubs[idx].link === update.link) return ids
+  if (stubs[idx].link === update.link) return current
 
-  return ids.map((oldId, i) => i === idx ? id : oldId)
+  return current.map((oldBacklink, i) => i === idx ? backlink : oldBacklink)
+}
+
+const groupChanges = (changes:Change[]) => {
+  const updatedResources = _.chain(changes)
+    .flatMap(({ before, after }) => {
+      const resources = []
+      if (before) resources.push(before.targetStub)
+      if (after) resources.push(after.targetStub)
+      return resources
+    })
+    .groupBy(({ id }) => parseId(id).permalink)
+    .value()
+}
+
+const getChanges = ({ before, after, model }):Change[] => {
+  const forwardLinksBefore = this.getForwardLinks(before)
+  const forwardLinksAfter = this.getForwardLinks(after)
+  const props = uniqueStrict(
+    Object.keys(forwardLinksBefore)
+      .concat(Object.keys(forwardLinksAfter))
+  )
+
+  const changes = props.map(propertyName => {
+    const valBefore = forwardLinksBefore[propertyName]
+    const valAfter = forwardLinksAfter[propertyName]
+    if (_.isEqual(valBefore, valAfter)) return
+
+    return {
+      before: valBefore,
+      after: valAfter
+    }
+  })
+  .filter(_.identity)
+
+  return changes
 }
