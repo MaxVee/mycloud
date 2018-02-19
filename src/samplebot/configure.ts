@@ -329,7 +329,7 @@ export class Conf {
 
     const logo = await this.getLogo(conf)
     const { style } = conf
-    if (!style.logo) {
+    if (logo && !style.logo) {
       style.logo = {
         url: logo
       }
