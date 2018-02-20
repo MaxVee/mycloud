@@ -497,6 +497,8 @@ export async function waterfall (fns, ...args) {
   return result
 }
 
+export const getTodayISO = () => new Date().toISOString().slice(0, 10)
+
 export function getLaunchStackUrl ({
   region=process.env.AWS_REGION,
   stackName,
@@ -510,11 +512,11 @@ export function getLaunchStackUrl ({
 
 export function domainToUrl (domain) {
   if (domain.startsWith('//')) {
-    return 'http:' + domain
+    return 'https:' + domain
   }
 
   if (!/^https?:\/\//.test(domain)) {
-    return 'http://' + domain
+    return 'https://' + domain
   }
 
   return domain
