@@ -4,17 +4,31 @@ import {
   IPluginOpts,
   IPluginExports,
   IPluginLifecycleMethods,
-  IDataBundle
+  IDataBundle,
+  IUser,
+  IPBApp,
+  IPBReq
 } from '../types'
 
 import { parseStub, omitVirtual, toUnsigned } from '../../utils'
 import Errors = require('../../errors')
 
+interface RequestItemOpts {
+  req: IPBReq
+  user: IUser
+  item: any
+  application?: IPBApp
+  message?: string
+  other?: any
+}
+
 export const name = 'prefillFromDraft'
 export function createPlugin ({
   bot,
   productsAPI,
+  // inviter,
   conf,
+  orgConf,
   logger
 }: IPluginOpts):IPluginExports {
 
@@ -62,6 +76,44 @@ export function createPlugin ({
 
     formRequest.prefill = toUnsigned(prefill)
   }
+
+//   plugin.onFormsCollected = async ({ req, user, application }) => {
+//     if (!application.draft) return
+
+//     const productModel = bot.models[application.requestFor]
+//     const opts: RequestItemOpts = {
+//       req,
+//       user,
+//       application,
+//       message: `Who shall we email an invite to this application?`,
+//       item: {
+//         [TYPE]: 'tradle.FormRequest',
+//         form: 'tradle.cloud.Invite',
+//         prefill: {
+//           [TYPE]: 'tradle.cloud.Invite',
+//           inviteLink: bot.appLinks.getApplyForProductLink({
+//             host: bot.apiBaseUrl,
+//             product: application.requestFor
+//           }),
+//           body: `Hi there,
+
+// We've prefilled some of the forms an application for a ${productModel.title} for you.
+
+// Have any questions? Ask us right in our chat channel!`,
+//           buttonText: 'Open Application'
+//         }
+//       }
+//     }
+
+//     await productsAPI.requestItem(opts)
+//   }
+
+//   plugin[`onmessage:tradle.cloud.Invite`] = async (req) => {
+//     const { user, application, payload, isFromEmployee } = req
+//     if (!isFromEmployee) return
+
+//     await inviter.sendInvite(payload)
+//   }
 
   return {
     plugin

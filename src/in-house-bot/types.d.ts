@@ -5,6 +5,7 @@ import { Commander } from './commander'
 import { Onfido } from './plugins/onfido'
 import { Remediation } from './remediation'
 import { Deployment } from './deployment'
+import { Inviter } from './inviter'
 import {
   ITradleObject,
   IIdentity,
@@ -123,6 +124,7 @@ export interface IPBApp extends ITradleObject {
   dateModified: number
   dateCompleted?: number
   draft?: boolean
+  prefillFromApplication?: ResourceStub
 }
 
 export interface IFormRequest extends ITradleObject {
@@ -220,6 +222,7 @@ export interface IPluginOpts {
   bot: Bot
   productsAPI: any
   employeeManager: any
+  // inviter?: any
   logger: Logger
   conf?: any // plugin conf
   orgConf: IConf
@@ -312,4 +315,13 @@ export interface IAppLinkSet {
   mobile?: string
   web?: string
   employeeOnboarding?: string
+}
+
+export interface IInvite {
+  subject: string
+  body: string
+  recipients: string[]
+  inviteLink?: string
+  buttonText?: string
+  signature?: string
 }

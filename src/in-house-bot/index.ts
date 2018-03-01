@@ -28,10 +28,11 @@ import {
   createModelsPackGetter
 } from './plugins/keep-models-fresh'
 
-import { Commander } from './commander'
 import { createRemediation } from './remediation'
 import { createPlugin as createRemediationPlugin } from './plugins/remediation'
 import { createPlugin as createPrefillFromDraftPlugin } from './plugins/prefill-from-draft'
+import { Commander } from './commander'
+// import { createInviter } from './inviter'
 
 import {
   Bot,
@@ -139,6 +140,15 @@ export default function createProductsBot ({
     employeeManager,
     orgConf: conf
   }
+
+  // currently senderEmail is in deployment opts
+  // if (plugins.deployment) {
+  //   commonPluginOpts.inviter = createInviter({
+  //     bot,
+  //     orgConf: conf,
+  //     conf: plugins.deployment
+  //   })
+  // }
 
   // employeeManager.hasEmployees = () => Promise.resolve(true)
 
