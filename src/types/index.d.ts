@@ -45,6 +45,8 @@ import { Mailer } from '../mailer'
 import { MiddlewareContainer } from '../middleware-container'
 import { ResourceStub } from '@tradle/validate-resource'
 
+type Folder = Bucket
+
 export {
   ResourceStub,
   ParsedResourceStub,
@@ -82,6 +84,7 @@ export {
   Init,
   AwsApis,
   Bucket,
+  Folder,
   Seal,
   Seals,
   SealPendingResult,

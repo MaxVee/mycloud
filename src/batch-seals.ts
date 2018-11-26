@@ -1,0 +1,251 @@
+import _ from 'lodash'
+import protocol from '@tradle/protocol'
+import {
+  DB,
+  ITradleObject,
+  Folder,
+} from './types'
+
+import {
+  TYPE,
+} from './constants'
+
+import {
+  sha256,
+} from './crypto'
+
+import Errors from './errors'
+import { pickNonNull } from './utils'
+
+interface MicroBatch {
+  merkleRoot: string
+  toTimestamp: number
+  fromTimestamp: number
+  // fromItem: string
+  // toItem: string
+  links: string[]
+}
+
+interface SealBatcherOpts {
+  db: DB
+  folder: Folder
+  safetyBuffer?: number
+}
+
+interface BatchedItem {
+  time: number
+  link: string
+  prevlink?: string
+}
+
+interface CreateBatchOpts {
+  items: BatchedItem[]
+}
+
+interface SealableBatch {
+  batchNumber: number
+  merkleRoot?: string
+  fromSubBatch?: string
+  toSubBatch?: string
+  // first link in batch
+  fromLink?: string
+  fromTimestamp?: number
+  // last link in batch
+  toLink?: string
+  toTimestamp?: number
+}
+
+const BATCH_TYPE = 'tradle.SealableBatch'
+
+export const BATCH_NUM_LENGTH = 20
+
+export class SealBatcher {
+  private db: DB
+  private microBatchesFolder: Folder
+  private safetyBuffer: number
+  constructor({ db, folder, safetyBuffer=3 }: SealBatcherOpts) {
+    this.db = db
+    this.microBatchesFolder = folder
+    this.safetyBuffer = safetyBuffer
+    if (safetyBuffer < 2) {
+      throw new Errors.InvalidInput(`"safetyBuffer" must be >= 2 or batching will experience to race conditions`)
+    }
+  }
+
+  public getLastBatch = async ():Promise<SealableBatch> => {
+    try {
+      return await this.db.findOne({
+        orderBy: {
+          property: '_time',
+          desc: true,
+        },
+        filter: {
+          EQ: {
+            [TYPE]: BATCH_TYPE
+          }
+        },
+      })
+    } catch (err) {
+      Errors.ignoreNotFound(err)
+    }
+  }
+
+  public getLastBatchNumber = async ():Promise<number> => {
+    const last = await this.getLastBatch()
+    return last ? last.batchNumber : -1
+  }
+
+  public getNextBatchNumber = async () => {
+    const batchNumber = await this.getLastBatchNumber()
+    return batchNumber + 1
+  }
+
+  public createAndSaveMicroBatchForResources = async (resources: ITradleObject[]) => {
+    return await this.createAndSaveMicroBatch({
+      items: resources.map(({ _time, _link, _prevlink }) => pickNonNull({
+        time: _time,
+        link: _link,
+        prevlink: _prevlink,
+      }))
+    })
+  }
+
+  // public getNextMicroBatchNumber = async () => {
+  //   const next = await this.getNextBatchNumber()
+  //   // avoid boundary issues by writing pre-batches at N + 1 ahead,
+  //   // and collecting them into batches
+  //   return next + this.safetyBuffer
+  // }
+
+  public createAndSaveMicroBatch = async (opts: CreateBatchOpts) => {
+    const batch = createMicroBatch(opts)
+    const number = await this.getNextBatchNumber()
+    const key = await this.saveMicroBatch({ batch, number })
+    return { batch, number, key }
+  }
+
+  public saveMicroBatch = async ({ batch, number }: {
+    batch: MicroBatch
+    number: number
+  }) => {
+    const key = getKeyForMicroBatch({ batch, number })
+    await this.microBatchesFolder.gzipAndPut(key, batch, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    return key
+  }
+
+  public createNextBatch = async () => {
+    const result = await this.getMicroBatchesForNextBatch()
+    // create even if empty, it's important for the safetyBuffer to work
+    return this.createBatchForMicroBatches(result)
+  }
+
+  public getMicroBatchesForNextBatch = async () => {
+    const batchNumber = await this.getNextBatchNumber()
+    const ret = {
+      batchNumber,
+      microBatches: []
+    }
+
+    if (batchNumber < this.safetyBuffer) {
+      return ret
+    }
+
+    ret.microBatches = await this.getMicroBatches(batchNumber - this.safetyBuffer)
+    return ret
+  }
+
+  public createBatchForMicroBatches = async ({ batchNumber, microBatches }: {
+    batchNumber: number
+    microBatches: MicroBatch[]
+  }):Promise<SealableBatch> => {
+    if (!microBatches.length) {
+      return {
+        batchNumber,
+      }
+    }
+
+    const earliest = _.minBy(microBatches, 'fromTimestamp')
+    const latest = _.maxBy(microBatches, 'toTimestamp')
+    return {
+      merkleRoot: getMerkleRootForMicroBatches(microBatches),
+      batchNumber,
+      fromSubBatch: earliest.merkleRoot,
+      toSubBatch: latest.merkleRoot,
+      fromLink: earliest.links[0],
+      fromTimestamp: earliest.fromTimestamp,
+      toLink: _.last(latest.links),
+      toTimestamp: latest.toTimestamp,
+    }
+  }
+
+  public getMicroBatches = async (batchNumber: number):Promise<MicroBatch[]> => {
+    const prefix = getKeyPrefixForBatchNumber(batchNumber)
+    const s3Objs = await this.microBatchesFolder.listObjectsWithKeyPrefix(prefix)
+    const microBatches = s3Objs
+      .map(o => o.Body)
+      // @ts-ignore
+      .map(json => JSON.parse(json)) as MicroBatch[]
+
+    return microBatches
+  }
+}
+
+const leftPadNumberWithZeroes = (num: number, toLength: number): string => {
+  const numStr = String(num)
+  const padLength = Math.max(toLength - numStr.length, 0)
+  return '0'.repeat(padLength) + numStr
+}
+
+const encodeBatchNumber = (batchNum: number):string => leftPadNumberWithZeroes(batchNum, BATCH_NUM_LENGTH)
+
+const decodeBatchNumber = (batchNum: string):number => {
+  const idx = batchNum.lastIndexOf('0')
+  if (idx !== -1) {
+    batchNum = batchNum.slice(idx + 1)
+  }
+
+  return parseInt(batchNum, 10)
+}
+
+export const getKeyPrefixForBatchNumber = (batchNum: number) => encodeBatchNumber(batchNum) + '/'
+
+export const getKeyForMicroBatch = ({ batch, number }: {
+  batch: MicroBatch
+  number: number
+}):string => {
+  const { fromTimestamp } = batch
+  const buf = new Buffer(batch.links.join(''), 'hex')
+  const hash = sha256(buf, 'hex').slice(0, 20)
+  return `${getKeyPrefixForBatchNumber(number)}${fromTimestamp}/${hash}.json`
+}
+
+export const createMicroBatch = ({ items }: CreateBatchOpts) => {
+  const sortedByTime = _.sortBy(items.slice(), 'time')
+  const links = sortedByTime.map(r => r.link)
+  const batch:MicroBatch = {
+    merkleRoot: getMerkleRootForLinks(links),
+    links,
+    fromTimestamp: items[0].time,
+    toTimestamp: _.last(items).time,
+  }
+
+  return batch
+}
+
+export const createSealBatcher = (opts: SealBatcherOpts) => new SealBatcher(opts)
+
+export const getMerkleRootForMicroBatches = (microBatches: MicroBatch[]) => {
+  const links = microBatches.reduce((links, batch) => links.concat(batch.links), [])
+  return getMerkleRootForLinks(links)
+}
+
+export const getMerkleRootForLinks = (links: string[]) => {
+  const bufs = links.map(link => new Buffer(link, 'hex'))
+  const { root } = protocol.merkleTreeFromHashes(bufs)
+  return root.toString('hex')
+}
