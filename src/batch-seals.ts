@@ -100,8 +100,8 @@ export class SealBatcher {
     return batchNumber + 1
   }
 
-  public createAndSaveMicroBatchForResources = async (resources: ITradleObject[]) => {
-    return await this.createAndSaveMicroBatch({
+  public createMicroBatchForResources = async (resources: ITradleObject[]) => {
+    return await this.createMicroBatch({
       items: resources.map(({ _time, _link, _prevlink }) => pickNonNull({
         time: _time,
         link: _link,
@@ -117,7 +117,7 @@ export class SealBatcher {
   //   return next + this.safetyBuffer
   // }
 
-  public createAndSaveMicroBatch = async (opts: CreateBatchOpts) => {
+  public createMicroBatch = async (opts: CreateBatchOpts) => {
     const batch = createMicroBatch(opts)
     const number = await this.getNextBatchNumber()
     const key = await this.saveMicroBatch({ batch, number })
@@ -138,10 +138,10 @@ export class SealBatcher {
     return key
   }
 
-  public createNextBatch = async () => {
+  public genNextBatch = async () => {
     const result = await this.getMicroBatchesForNextBatch()
     // create even if empty, it's important for the safetyBuffer to work
-    return this.createBatchForMicroBatches(result)
+    return this.batchMicroBatches(result)
   }
 
   public getMicroBatchesForNextBatch = async () => {
@@ -159,7 +159,7 @@ export class SealBatcher {
     return ret
   }
 
-  public createBatchForMicroBatches = async ({ batchNumber, microBatches }: {
+  public batchMicroBatches = async ({ batchNumber, microBatches }: {
     batchNumber: number
     microBatches: MicroBatch[]
   }):Promise<SealableBatch> => {

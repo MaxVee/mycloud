@@ -113,7 +113,7 @@ export const checkFailedSeals:Executor = async ({ job, components }) => {
 export const createSealBatch:Executor = async ({ job, components }) => {
   const { bot } = components
   const { sealBatcher } = bot
-  const unsigned = await sealBatcher.createNextBatch()
+  const unsigned = await sealBatcher.genNextBatch()
   const signed = await bot.draft({
     type: TYPES.BATCH_SEAL_TYPE,
     resource: unsigned

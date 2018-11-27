@@ -75,7 +75,7 @@ if (bot.env.SEALING_MODE === 'batch') {
   COMMON_JOBS.push({
     name: 'createSealBatch',
     function: DEFAULT_JOB_RUNNER_FUNCTION,
-    period: 1 * MINUTE,
+    period: 5 * MINUTE,
   })
 }
 

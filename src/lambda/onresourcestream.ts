@@ -124,7 +124,7 @@ export const batchSeals = async ({ bot, records }: {
     .filter(r => r._link)
 
   if (sealable.length) {
-    await sealBatcher.createAndSaveMicroBatchForResources(sealable)
+    await sealBatcher.createMicroBatchForResources(sealable)
   }
 }
 

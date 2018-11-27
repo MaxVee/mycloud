@@ -82,7 +82,7 @@ test('respect safety buffer', loudAsync(async t => {
   const microBatch1MerkleRoot = '1d3792976568751704f3b6ababe5e5849986b9ab880b9cf4f62e4a09b6ec31e0'
   const firstBatchNumStr = '0'.repeat(BATCH_NUM_LENGTH)
   const expectedKey = `${firstBatchNumStr}/${microBatch1[0].time}/9b11457aa29d65e4940b.json`
-  t.same(await batcher.createAndSaveMicroBatch({ items: microBatch1 }), {
+  t.same(await batcher.createMicroBatch({ items: microBatch1 }), {
     batch: {
       merkleRoot: microBatch1MerkleRoot,
       links: [ '1234', 'abcd' ],
@@ -112,26 +112,26 @@ test('respect safety buffer', loudAsync(async t => {
   ])
 
   // we're behind the safetyBuffer, so no items yet
-  lastBatch = await batcher.createNextBatch()
+  lastBatch = await batcher.genNextBatch()
   t.same(lastBatch, {
     batchNumber: 0
   })
 
-  await batcher.createAndSaveMicroBatch({
+  await batcher.createMicroBatch({
     items: microBatches[1],
   })
 
   // we're behind the safetyBuffer, so no items yet
-  lastBatch = await batcher.createNextBatch()
+  lastBatch = await batcher.genNextBatch()
   t.same(lastBatch, {
     batchNumber: 1
   })
 
-  await batcher.createAndSaveMicroBatch({
+  await batcher.createMicroBatch({
     items: microBatches[2],
   })
 
-  lastBatch = await batcher.createNextBatch()
+  lastBatch = await batcher.genNextBatch()
   // first microBatch
   t.equal(lastBatch.batchNumber, 2)
   t.equal(lastBatch.fromLink, microBatch1[0].link)
@@ -154,16 +154,16 @@ test('merge micro batches', loudAsync(async t => {
     return lastBatch
   })
 
-  await Promise.mapSeries(microBatches, items => batcher.createAndSaveMicroBatch({ items }))
+  await Promise.mapSeries(microBatches, items => batcher.createMicroBatch({ items }))
 
   for (let i = 0; i < safetyBuffer; i++) {
-    lastBatch = await batcher.createNextBatch()
+    lastBatch = await batcher.genNextBatch()
     t.same(lastBatch, { batchNumber: i })
   }
 
   t.equal((await batcher.getMicroBatchesForNextBatch()).microBatches.length, 3)
 
-  lastBatch = await batcher.createNextBatch()
+  lastBatch = await batcher.genNextBatch()
   t.equal(lastBatch.batchNumber, 2)
   t.equal(lastBatch.fromLink, 'dddd')
   t.equal(lastBatch.fromTimestamp, 100)
