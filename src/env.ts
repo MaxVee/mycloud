@@ -10,7 +10,8 @@ import {
   Lambda,
   IRequestContext,
   CloudName,
-  IBlockchainIdentifier
+  IBlockchainIdentifier,
+  SealingMode,
 } from './types'
 import { WARMUP_SOURCE_NAME, ROOT_LOGGING_NAMESPACE } from './constants'
 import Logger, { Level } from './logger'
@@ -68,6 +69,7 @@ export default class Env {
   public AWS_ACCOUNT_ID: string
   public SESSION_TTL?: number
   public ABORT_REQUESTS_ON_FREEZE?: boolean
+  public SEALING_MODE: SealingMode
 
   constructor(props:any) {
     props = clone(props)

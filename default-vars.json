@@ -26,6 +26,7 @@
   },
   "stackParameters": {
     "BlockchainNetwork": "ethereum:rinkeby",
+    "SealingMode": "single",
     "OrgName": "Super Awesome Org",
     "OrgDomain": "superawesome.org",
     "OrgLogo": "https://s3.amazonaws.com/tradle-public-images/logo/unknown.png",

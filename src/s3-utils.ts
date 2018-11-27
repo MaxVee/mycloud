@@ -47,17 +47,19 @@ type HeaderToS3PutOption = {
   [x: string]: keyof S3.PutObjectRequest
 }
 
-const headerToS3Option:HeaderToS3PutOption = {
+const mapToS3PutOption:HeaderToS3PutOption = {
+  ContentType: 'ContentType',
   'content-type': 'ContentType',
+  ContentEncoding: 'ContentEncoding',
   'content-encoding': 'ContentEncoding',
 }
 
-const caselessHeaderToS3Option = caseless(headerToS3Option)
+const toS3PutOption = caseless(mapToS3PutOption)
 
 const mapHeadersToS3PutOptions = (headers:any):Partial<S3.PutObjectRequest> => {
   const putOpts:Partial<S3.PutObjectRequest> = {}
   for (let name in headers) {
-    let s3Option = caselessHeaderToS3Option.get(name)
+    let s3Option = toS3PutOption.get(name)
     if (!s3Option) {
       throw new Errors.InvalidInput(`unrecognized header: ${name}`)
     }

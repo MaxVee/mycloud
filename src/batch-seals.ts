@@ -225,6 +225,10 @@ export const getKeyForMicroBatch = ({ batch, number }: {
 }
 
 export const createMicroBatch = ({ items }: CreateBatchOpts) => {
+  if (!items.length) {
+    throw new Errors.InvalidInput(`expected non-empty array of items`)
+  }
+
   const sortedByTime = _.sortBy(items.slice(), 'time')
   const links = sortedByTime.map(r => r.link)
   const batch:MicroBatch = {

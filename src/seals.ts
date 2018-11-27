@@ -80,7 +80,7 @@ type CreateSealWithObjectOpts = {
   counterparty?: string
 }
 
-type CreateSealOpts = CreateSealWithHeaderHashOpts | CreateSealWithObjectOpts
+export type CreateSealOpts = CreateSealWithHeaderHashOpts | CreateSealWithObjectOpts
 
 interface ISealRecordOpts extends Partial<ISealDataIdentifier> {
   key?: IECMiniPubKey

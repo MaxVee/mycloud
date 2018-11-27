@@ -2,6 +2,7 @@
 import Promise from 'bluebird'
 import omit from 'lodash/omit'
 import pick from 'lodash/pick'
+import notNull from 'lodash/identity'
 import groupBy from 'lodash/groupBy'
 import { TYPE } from '@tradle/constants'
 import { utils as dynamoUtils } from '@tradle/dynamodb'
@@ -110,6 +111,23 @@ export const createMiddleware = (bot:Bot) => {
   }
 }
 
+export const batchSeals = async ({ bot, records }: {
+  bot: Bot
+  records: IStreamRecord[]
+}) => {
+  const { sealBatcher } = bot
+  if (!sealBatcher) return
+
+  const sealable = records
+    .map(r => r.value)
+    .filter(notNull)
+    .filter(r => r._link)
+
+  if (sealable.length) {
+    await sealBatcher.createAndSaveMicroBatchForResources(sealable)
+  }
+}
+
 export const processRecords = async ({ bot, records }: {
   bot: Bot
   records: IStreamRecord[]
@@ -120,6 +138,7 @@ export const processRecords = async ({ bot, records }: {
   //   record.laneId = getLaneId(record)
   // })
 
+  const sealBatchPromise = batchSeals({ bot, records })
   const byCat = groupBy(records, Events.getEventCategory)
   if (byCat.resource) {
     byCat.resource.forEach(r => {
@@ -143,6 +162,10 @@ export const processRecords = async ({ bot, records }: {
     perItemTimeout: SAFETY_MARGIN_MILLIS,
     timeout: Math.max(timeLeft - 1000, 0)
   })
+
+  if (sealBatchPromise) {
+    await sealBatchPromise
+  }
 }
 
 const isMessageRecord = (r: IStreamRecord) => r.value && r.value[TYPE] === 'tradle.Message'

@@ -320,6 +320,8 @@ provider:
       Ref: AWS::StackName
     BLOCKCHAIN:
       Ref: BlockchainNetwork
+    SEALING_MODE:
+      Ref: SealingMode
     CORDA_API_URL: ${{self:custom.corda.apiUrl}}
     CORDA_API_KEY: ${{self:custom.corda.apiKey}}
     DEBUG: '*lambda*,tradle*,-@tradle/dynamodb'
@@ -1262,6 +1264,13 @@ resources:
         - 'ethereum:rinkeby'
         - 'ethereum:ropsten'
 
+    SealingMode:
+      Type: String
+      Default: 'single'
+      AllowedValues:
+        - 'single'
+        - 'batch'
+
     AutoScalingEnabled:
       Type: String
       Default: "true"
@@ -1406,6 +1415,8 @@ resources:
 
         BlockchainNetwork:
           default: Blockchain Network
+        SealingMode:
+          default: single
         PointInTimeRecoveryEnabledEventsTable:
           default: Enable point-in-time recovery for the Events table
         PointInTimeRecoveryEnabledBucket0Table:
