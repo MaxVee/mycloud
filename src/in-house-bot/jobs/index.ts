@@ -121,7 +121,9 @@ export const createSealBatch:Executor = async ({ job, components }) => {
   .signAndSave()
   .then(r => r.toJSON())
 
-  await bot.seal(signed)
+  await bot.seal({
+    object: signed
+  })
 }
 
 // export const documentChecker:Executor = async ({ job, components }) => {
