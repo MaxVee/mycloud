@@ -324,9 +324,9 @@
       "resolved": "git://github.com/tradle/plugin-onfido.git#1e2b52ae23aa38c8e8a4c52d024332de9a317d38"
     },
     "@tradle/protocol": {
-      "version": "5.0.0",
+      "version": "5.1.0",
       "from": "@tradle/protocol@latest",
-      "resolved": "https://registry.npmjs.org/@tradle/protocol/-/protocol-5.0.0.tgz"
+      "resolved": "https://registry.npmjs.org/@tradle/protocol/-/protocol-5.1.0.tgz"
     },
     "@tradle/qr": {
       "version": "2.1.0",
