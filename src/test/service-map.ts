@@ -36,7 +36,7 @@ Object.keys(environment).forEach(key => {
     return
   }
 
-  if (key === 'SEALING_MODE') {
+  if (key === 'SEALING_MODE' || key === 'SEAL_BATCHING_PERIOD') {
     map[key] = getStackParameter(val.Ref)
     return
   }

@@ -120,6 +120,10 @@ export class SealBatcher {
   public createMicroBatch = async (opts: CreateBatchOpts) => {
     const batch = createMicroBatch(opts)
     const number = await this.getNextBatchNumber()
+    if (!batch.links.length) {
+      return null
+    }
+
     const key = await this.saveMicroBatch({ batch, number })
     return { batch, number, key }
   }
