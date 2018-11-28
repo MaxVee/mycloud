@@ -4,13 +4,13 @@ import omit from 'lodash/omit'
 import pick from 'lodash/pick'
 import notNull from 'lodash/identity'
 import groupBy from 'lodash/groupBy'
-import { TYPE } from '@tradle/constants'
 import { utils as dynamoUtils } from '@tradle/dynamodb'
 import { Bot, IStreamRecord, ITradleObject, Model, DB } from '../types'
 import { fromDynamoDB } from '../lambda'
 // import { createMiddleware as createMessageMiddleware } from '../middleware/onmessagestream'
 import Errors from '../errors'
 import Events from '../events'
+import { TYPE, TYPES } from '../constants'
 
 const promiseUndefined = Promise.resolve(undefined)
 // when to give up trying to find an object in object storage
@@ -121,7 +121,7 @@ export const batchSeals = async ({ bot, records }: {
   const sealable = records
     .map(r => r.value)
     .filter(notNull)
-    .filter(r => r._link)
+    .filter(r => r._link && r[TYPE] !== TYPES.SEALABLE_BATCH)
 
   if (sealable.length) {
     await sealBatcher.createMicroBatchForResources(sealable)

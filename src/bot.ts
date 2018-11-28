@@ -783,7 +783,7 @@ export class Bot extends EventEmitter implements IReady, IHasModels {
   // public maybeEnqueueSeal = async (opts: CreateSealOpts) => {
   //   const shouldQueueImmediately = !this.sealBatcher ||
   //     // @ts-ignore
-  //     (opts.object && opts.object[TYPE] === TYPES.BATCH_SEAL_TYPE)
+  //     (opts.object && opts.object[TYPE] === TYPES.SEALABLE_BATCH)
 
   //   if (shouldQueueImmediately) {
   //     await this.seals.create(opts)

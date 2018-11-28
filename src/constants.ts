@@ -36,7 +36,7 @@ const TYPES = {
   BACKLINK_ITEM: 'tradle.BacklinkItem',
   SEAL_STATE: 'tradle.SealState',
   DELIVERY_ERROR: 'tradle.DeliveryError',
-  BATCH_SEAL_TYPE: 'tradle.SealableBatch',
+  SEALABLE_BATCH: 'tradle.SealableBatch',
 }
 
 const UNSIGNED_TYPES = [

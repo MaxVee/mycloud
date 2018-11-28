@@ -121,7 +121,7 @@ export const createSealBatch:Executor = async ({ job, components }) => {
 
   logger.debug('creating seal batch')
   const signed = await bot.draft({
-    type: TYPES.BATCH_SEAL_TYPE,
+    type: TYPES.SEALABLE_BATCH,
     resource: unsigned
   })
   .signAndSave()

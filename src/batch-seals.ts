@@ -105,6 +105,10 @@ export class SealBatcher {
   }
 
   public createMicroBatchForResources = async (resources: ITradleObject[]) => {
+    this.logger.debug('creating micro batch for resources of type', {
+      resources: resources.map(r => r[TYPE])
+    })
+
     return await this.createMicroBatch({
       items: resources.map(({ _time, _link, _prevlink }) => pickNonNull({
         time: _time,
