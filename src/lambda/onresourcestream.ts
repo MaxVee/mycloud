@@ -116,7 +116,10 @@ export const batchSeals = async ({ bot, records }: {
   records: IStreamRecord[]
 }) => {
   const { sealBatcher } = bot
-  if (!sealBatcher) return
+  if (!sealBatcher) {
+    bot.logger.debug('seal batcher not set up')
+    return
+  }
 
   const sealable = records
     .map(r => r.value)
@@ -125,6 +128,8 @@ export const batchSeals = async ({ bot, records }: {
 
   if (sealable.length) {
     await sealBatcher.createMicroBatchForResources(sealable)
+  } else {
+    bot.logger.debug('no sealable records', records.map(r => r.value).filter(notNull).map(r => r._t))
   }
 }
 

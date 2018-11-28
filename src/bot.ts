@@ -598,7 +598,7 @@ export class Bot extends EventEmitter implements IReady, IHasModels {
     }))
 
     if (this.env.SEALING_MODE === 'batch') {
-      this.logger.debug('using batch sealing mode')
+      this.logger.debug('sealing in batch mode')
       bot.define('sealBatcher', './batch-seals', ({ createSealBatcher }) => createSealBatcher({
         db,
         folder: bot.buckets.Objects.folder(`seals/batch/${BATCH_SEALING_PROTOCOL_VERSION}`),
