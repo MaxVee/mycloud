@@ -4,6 +4,7 @@ import {
   DB,
   ITradleObject,
   Folder,
+  Logger,
 } from './types'
 
 import {
@@ -29,6 +30,7 @@ interface MicroBatch {
 interface SealBatcherOpts {
   db: DB
   folder: Folder
+  logger: Logger
   safetyBuffer?: number
 }
 
@@ -62,11 +64,13 @@ export const BATCH_NUM_LENGTH = 20
 export class SealBatcher {
   private db: DB
   private microBatchesFolder: Folder
+  private logger: Logger
   private safetyBuffer: number
-  constructor({ db, folder, safetyBuffer=3 }: SealBatcherOpts) {
+  constructor({ db, folder, logger, safetyBuffer=3 }: SealBatcherOpts) {
     this.db = db
     this.microBatchesFolder = folder
     this.safetyBuffer = safetyBuffer
+    this.logger = logger
     if (safetyBuffer < 2) {
       throw new Errors.InvalidInput(`"safetyBuffer" must be >= 2 or batching will experience to race conditions`)
     }
@@ -177,6 +181,9 @@ export class SealBatcher {
 
     const earliest = _.minBy(microBatches, 'fromTimestamp')
     const latest = _.maxBy(microBatches, 'toTimestamp')
+    const size = microBatches.reduce((sum, next) => sum + next.links.length, 0)
+
+    this.logger.debug(`batching ${microBatches.length} micro batches referencing a total of ${size} objects`)
     return {
       batchNumber,
       merkleRoot: getMerkleRootForMicroBatches(microBatches),

@@ -10,6 +10,7 @@ import { createTestBot } from '../'
 import Errors from '../errors'
 import { loudAsync } from '../utils'
 import { randomStringWithLength } from '../crypto'
+import { consoleLogger } from '../logger'
 
 const bot = createTestBot()
 const microBatches = [
@@ -38,6 +39,7 @@ const setup = opts => {
   const batcher = createSealBatcher({
     db,
     folder,
+    logger: consoleLogger,
     safetyBuffer: 2,
     ...opts,
   })

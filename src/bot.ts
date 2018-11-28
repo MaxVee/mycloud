@@ -602,6 +602,7 @@ export class Bot extends EventEmitter implements IReady, IHasModels {
       bot.define('sealBatcher', './batch-seals', ({ createSealBatcher }) => createSealBatcher({
         db,
         folder: bot.buckets.Objects.folder(`seals/batch/${BATCH_SEALING_PROTOCOL_VERSION}`),
+        logger: logger.sub('batch-seals'),
         safetyBuffer: 2,
       }))
     }
