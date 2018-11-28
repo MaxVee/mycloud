@@ -153,9 +153,17 @@ export class SealBatcher {
   public genNextBatch = async () => {
     const result = await this.getMicroBatchesForNextBatch()
     // create even if empty, it's important for the safetyBuffer to work
-    if (result.microBatches.length || result.batchNumber < this.safetyBuffer) {
-      return this.batchMicroBatches(result)
-    }
+    // if (!result.microBatches.length) {
+    //   this.logger.debug(`no micro batches found for batchNumber ${result.batchNumber}`)
+    // }
+
+    // if (result.microBatches.length || result.batchNumber < this.safetyBuffer) {
+    //   return this.batchMicroBatches(result)
+    // }
+
+    // if we don't create the next (potentially empty) batch,
+    // we will never get past this (potentially empty) batch
+    return this.batchMicroBatches(result)
   }
 
   public getMicroBatchesForNextBatch = async () => {

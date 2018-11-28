@@ -114,10 +114,10 @@ export const createSealBatch:Executor = async ({ job, components }) => {
   const { bot, logger } = components
   const { sealBatcher } = bot
   const unsigned = await sealBatcher.genNextBatch()
-  if (!unsigned) {
-    logger.debug('skipping create of seal batch, nothing to batch')
-    return
-  }
+  // if (!unsigned) {
+  //   logger.debug('skipping create of seal batch, nothing to batch')
+  //   return
+  // }
 
   logger.debug('creating seal batch')
   const signed = await bot.draft({
