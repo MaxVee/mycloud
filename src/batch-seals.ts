@@ -145,7 +145,9 @@ export class SealBatcher {
   public genNextBatch = async () => {
     const result = await this.getMicroBatchesForNextBatch()
     // create even if empty, it's important for the safetyBuffer to work
-    return this.batchMicroBatches(result)
+    if (result.microBatches.length || result.batchNumber < this.safetyBuffer) {
+      return this.batchMicroBatches(result)
+    }
   }
 
   public getMicroBatchesForNextBatch = async () => {
@@ -176,8 +178,8 @@ export class SealBatcher {
     const earliest = _.minBy(microBatches, 'fromTimestamp')
     const latest = _.maxBy(microBatches, 'toTimestamp')
     return {
-      merkleRoot: getMerkleRootForMicroBatches(microBatches),
       batchNumber,
+      merkleRoot: getMerkleRootForMicroBatches(microBatches),
       fromSubBatch: earliest.merkleRoot,
       toSubBatch: latest.merkleRoot,
       fromLink: earliest.links[0],
